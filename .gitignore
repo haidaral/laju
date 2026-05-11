@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+
+.env
+.env.*
+!.env.example
+
+*.log
+.next-dev.log
+.next-dev.err.log
+.laju-*.png
+
+coverage/
+playwright-report/
+test-results/
