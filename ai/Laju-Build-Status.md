@@ -127,3 +127,33 @@ Build invite-ready public surface:
 1. Add `/landing`, `/help`, and `/changelog` or route structure that does not block the operational app.
 2. Keep root as operational dashboard during v0.1 local build unless auth redirects are added.
 3. Add concise public copy that does not overclaim AI features.
+
+## 2026-05-11 Fifth Slice
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Added invite-ready public surface:
+  - `/landing`
+  - `/help`
+  - `/changelog`
+- Added shared `PublicShell` component.
+- Added public page styling in `app/public-pages.css`.
+- Kept `/` as the operational dashboard for local v0.1 use.
+- Kept public copy scoped to tracker, reminders, export, and invite phase. AI is described only as later.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Playwright public route smoke:
+  - `/landing`: heading visible.
+  - `/help`: heading visible.
+  - `/changelog`: heading visible.
+  - mobile `/help`: heading visible.
+- Restarted dev server after production build to avoid stale `.next` dev chunks.
+
+## Next Smallest Ticket
+Add first-run onboarding inside the app:
+1. Empty/demo mode controls.
+2. Clear sample-data label.
+3. First-entry checklist that supports Gate A founder-use validation.
