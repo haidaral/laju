@@ -100,3 +100,30 @@ Start Clerk/Supabase wiring after credentials are configured:
 2. Add Supabase server client.
 3. Add Clerk auth middleware and protected app routes.
 4. Replace `501 not_configured` route stubs with user-scoped API behavior.
+
+## 2026-05-11 Fourth Slice
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Added editable entry detail drawer.
+- Added Save Changes flow for title, company/client, platform, location, currency, work type, value, notes, and status.
+- Added Delete Entry flow.
+- Added Kanban drag-to-stage behavior using native drag/drop.
+- Added activity log events for detail updates and deletes.
+- Updated Supabase migration action enum to include `deleted`.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Playwright CRUD/DnD smoke:
+  - edit entry title: passed.
+  - drag card from Interview to Offering: passed.
+  - delete entry: passed.
+  - delete activity log visible: passed.
+
+## Next Smallest Ticket
+Build invite-ready public surface:
+1. Add `/landing`, `/help`, and `/changelog` or route structure that does not block the operational app.
+2. Keep root as operational dashboard during v0.1 local build unless auth redirects are added.
+3. Add concise public copy that does not overclaim AI features.

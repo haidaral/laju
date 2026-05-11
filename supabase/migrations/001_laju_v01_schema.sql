@@ -25,7 +25,7 @@ create table if not exists public.activity_log (
   id uuid primary key default gen_random_uuid(),
   entry_id uuid not null references public.entries(id) on delete cascade,
   user_id text not null,
-  action text not null check (action in ('created', 'status_change', 'followed_up', 'ghosted', 'note_added', 'score_generated')),
+  action text not null check (action in ('created', 'status_change', 'followed_up', 'ghosted', 'note_added', 'score_generated', 'deleted')),
   old_status text,
   new_status text,
   note text not null default '',

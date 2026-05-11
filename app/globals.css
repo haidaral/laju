@@ -374,6 +374,11 @@ label textarea,
   margin-bottom: 10px;
   display: grid;
   gap: 8px;
+  cursor: grab;
+}
+
+.entry-card:active {
+  cursor: grabbing;
 }
 
 .entry-card.stale {
@@ -478,6 +483,12 @@ tr:hover td {
   gap: 10px;
 }
 
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
 .drawer-heading {
   display: flex;
   justify-content: space-between;
@@ -508,6 +519,21 @@ tr:hover td {
 .timeline {
   border-top: 1px solid var(--line);
   padding-top: 16px;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.danger-button {
+  border: 1px solid #c97d60;
+  background: #fff7f3;
+  color: #8d351b;
+  border-radius: 7px;
+  padding: 11px 14px;
+  font-weight: 700;
 }
 
 .timeline div {
@@ -545,9 +571,16 @@ tr:hover td {
 
   .topbar,
   .toolbar,
+  .form-row,
+  .drawer-actions,
   .reminder-row,
   .activity-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

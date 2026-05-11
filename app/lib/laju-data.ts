@@ -21,7 +21,7 @@ export type Entry = {
 export type ActivityLog = {
   id: number;
   entryId: number;
-  action: "created" | "status_change" | "followed_up" | "ghosted";
+  action: "created" | "status_change" | "followed_up" | "ghosted" | "note_added" | "deleted";
   oldStatus?: string;
   newStatus?: string;
   note: string;

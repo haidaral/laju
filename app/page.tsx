@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   buildEntriesCsv,
   currentDate,
@@ -107,6 +107,50 @@ export default function Home() {
       },
       ...current
     ]);
+  }
+
+  function updateEntry(updatedEntry: Entry) {
+    const existingEntry = entries.find((entry) => entry.id === updatedEntry.id);
+    if (!existingEntry) return;
+
+    const entryWithTimestamp = {
+      ...updatedEntry,
+      lastUpdated: currentDate
+    };
+
+    setEntries((current) => current.map((entry) => (entry.id === updatedEntry.id ? entryWithTimestamp : entry)));
+    setSelectedEntry(entryWithTimestamp);
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId: updatedEntry.id,
+        action: existingEntry.status !== updatedEntry.status ? "status_change" : "note_added",
+        oldStatus: existingEntry.status,
+        newStatus: updatedEntry.status,
+        note: `${updatedEntry.title} details updated.`,
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+  }
+
+  function deleteEntry(entryId: number) {
+    const entryToDelete = entries.find((entry) => entry.id === entryId);
+    if (!entryToDelete) return;
+
+    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId,
+        action: "deleted",
+        oldStatus: entryToDelete.status,
+        note: `${entryToDelete.title} deleted from ${entryToDelete.type === "job" ? "job" : "freelance"} pipeline.`,
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+    setSelectedEntry(null);
   }
 
   function addEntry(formData: FormData) {
@@ -218,7 +262,7 @@ export default function Home() {
             {isCreating ? (
               <CreateEntry close={() => setIsCreating(false)} addEntry={addEntry} />
             ) : selectedEntry ? (
-              <EntryDetail entry={selectedEntry} updateStatus={updateStatus} close={() => setSelectedEntry(null)} />
+              <EntryDetail entry={selectedEntry} updateEntry={updateEntry} deleteEntry={deleteEntry} close={() => setSelectedEntry(null)} />
             ) : null}
           </aside>
         </div>
@@ -358,6 +402,13 @@ function Pipeline({
   const pipelineEntries = entries.filter((entry) => entry.type === type && (filter === "All" || entry.platform === filter));
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
 
+  function handleDrop(event: DragEvent<HTMLDivElement>, status: string) {
+    const rawEntryId = event.dataTransfer.getData("text/plain");
+    const entryId = Number(rawEntryId);
+    if (!entryId) return;
+    updateStatus(entryId, status);
+  }
+
   return (
     <section className="pipeline-space">
       <div className="toolbar">
@@ -379,7 +430,12 @@ function Pipeline({
       {view === "kanban" ? (
         <div className="kanban">
           {stages.map((stage) => (
-            <div className="kanban-column" key={stage}>
+            <div
+              className="kanban-column"
+              key={stage}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => handleDrop(event, stage)}
+            >
               <div className="column-heading">
                 <strong>{stage}</strong>
                 <span>{pipelineEntries.filter((entry) => entry.status === stage).length}</span>
@@ -437,7 +493,15 @@ function EntryCard({
   stages: string[];
 }) {
   return (
-    <article className={isStale(entry) ? "entry-card stale" : "entry-card"} onClick={() => selectEntry(entry)}>
+    <article
+      className={isStale(entry) ? "entry-card stale" : "entry-card"}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/plain", String(entry.id));
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      onClick={() => selectEntry(entry)}
+    >
       <div className="card-topline">
         <span>{entry.platform}</span>
         <em>{daysSince(entry.lastUpdated)}d</em>
@@ -642,33 +706,91 @@ function CreateEntry({ close, addEntry }: { close: () => void; addEntry: (formDa
 
 function EntryDetail({
   entry,
-  updateStatus,
+  updateEntry,
+  deleteEntry,
   close
 }: {
   entry: Entry;
-  updateStatus: (id: number, status: string) => void;
+  updateEntry: (entry: Entry) => void;
+  deleteEntry: (id: number) => void;
   close: () => void;
 }) {
   const stages = getStages(entry.type);
+  const [draft, setDraft] = useState<Entry>(entry);
+
+  useEffect(() => {
+    setDraft(entry);
+  }, [entry]);
+
+  function saveEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft.title.trim() || !draft.company.trim()) return;
+    updateEntry({
+      ...draft,
+      title: draft.title.trim(),
+      company: draft.company.trim(),
+      platform: draft.platform.trim() || "Direct",
+      location: draft.location.trim() || "Remote",
+      value: draft.value.trim() || "TBD"
+    });
+  }
+
   return (
-    <div className="drawer-form">
+    <form className="drawer-form" onSubmit={saveEntry}>
       <div className="drawer-heading">
         <div>
-          <p>{entry.platform}</p>
-          <h2>{entry.title}</h2>
+          <p>{draft.platform}</p>
+          <h2>{draft.title}</h2>
         </div>
         <button type="button" onClick={close}>
           Close
         </button>
       </div>
       <div className="detail-stack">
-        <span>{entry.company}</span>
-        <span>{entry.location}</span>
-        <span>{entry.value}</span>
+        <span>{draft.company}</span>
+        <span>{draft.location}</span>
+        <span>{draft.value}</span>
       </div>
       <label>
+        Title
+        <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+      </label>
+      <label>
+        Company / Client
+        <input value={draft.company} onChange={(event) => setDraft((current) => ({ ...current, company: event.target.value }))} />
+      </label>
+      <label>
+        Platform
+        <input value={draft.platform} onChange={(event) => setDraft((current) => ({ ...current, platform: event.target.value }))} />
+      </label>
+      <label>
+        Location
+        <input value={draft.location} onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))} />
+      </label>
+      <div className="form-row">
+        <label>
+          Currency
+          <select value={draft.currency} onChange={(event) => setDraft((current) => ({ ...current, currency: event.target.value as Entry["currency"] }))}>
+            <option>IDR</option>
+            <option>USD</option>
+          </select>
+        </label>
+        <label>
+          Work Type
+          <select value={draft.workType} onChange={(event) => setDraft((current) => ({ ...current, workType: event.target.value as Entry["workType"] }))}>
+            <option>Remote</option>
+            <option>Hybrid</option>
+            <option>Onsite</option>
+          </select>
+        </label>
+      </div>
+      <label>
+        Value
+        <input value={draft.value} onChange={(event) => setDraft((current) => ({ ...current, value: event.target.value }))} />
+      </label>
+      <label>
         Status
-        <select value={entry.status} onChange={(event) => updateStatus(entry.id, event.target.value)}>
+        <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}>
           {stages.map((stage) => (
             <option key={stage}>{stage}</option>
           ))}
@@ -676,15 +798,23 @@ function EntryDetail({
       </label>
       <section className="notes-block">
         <h3>Notes</h3>
-        <p>{entry.notes || "No notes yet."}</p>
+        <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} />
       </section>
       <section className="timeline">
         <h3>Activity</h3>
         <div>
-          <strong>{entry.status}</strong>
-          <span>Updated {daysSince(entry.lastUpdated)} days ago</span>
+          <strong>{draft.status}</strong>
+          <span>Updated {daysSince(draft.lastUpdated)} days ago</span>
         </div>
       </section>
-    </div>
+      <div className="drawer-actions">
+        <button className="primary" type="submit">
+          Save Changes
+        </button>
+        <button className="danger-button" type="button" onClick={() => deleteEntry(entry.id)}>
+          Delete Entry
+        </button>
+      </div>
+    </form>
   );
 }
