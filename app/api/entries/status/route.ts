@@ -28,7 +28,15 @@ export async function POST(request: Request) {
     const result = await updateEntryStatus(userId, entryId, status);
     return Response.json(result);
   } catch (repoError) {
-    const message = repoError instanceof Error ? repoError.message : "Unknown server error";
+    const message =
+      repoError instanceof Error
+        ? repoError.message
+        : typeof repoError === "object" && repoError !== null && "message" in repoError
+          ? String((repoError as { message?: unknown }).message ?? "Unknown server error")
+          : "Unknown server error";
+    if (message === "ENTRY_NOT_FOUND") {
+      return Response.json({ error: "Entry not found for this user.", code: "validation_error" }, { status: 404 });
+    }
     return apiServerError("Failed to update entry status.", { message });
   }
 }

@@ -14,7 +14,12 @@ export async function GET(request: Request) {
     const settings = await getUserSettings(userId);
     return Response.json(settings);
   } catch (repoError) {
-    const message = repoError instanceof Error ? repoError.message : "Unknown server error";
+    const message =
+      repoError instanceof Error
+        ? repoError.message
+        : typeof repoError === "object" && repoError !== null && "message" in repoError
+          ? String((repoError as { message?: unknown }).message ?? "Unknown server error")
+          : "Unknown server error";
     return apiServerError("Failed to fetch user settings.", { message });
   }
 }
@@ -63,7 +68,12 @@ export async function PUT(request: Request) {
     });
     return Response.json(saved);
   } catch (repoError) {
-    const message = repoError instanceof Error ? repoError.message : "Unknown server error";
+    const message =
+      repoError instanceof Error
+        ? repoError.message
+        : typeof repoError === "object" && repoError !== null && "message" in repoError
+          ? String((repoError as { message?: unknown }).message ?? "Unknown server error")
+          : "Unknown server error";
     return apiServerError("Failed to save user settings.", { message });
   }
 }

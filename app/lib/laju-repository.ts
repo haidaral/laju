@@ -192,8 +192,9 @@ export async function updateEntryStatus(
     .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
     .eq("id", entryId)
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
   if (existingError) throw existingError;
+  if (!existingEntry) throw new Error("ENTRY_NOT_FOUND");
 
   const existing = existingEntry as DbEntryRow;
 
@@ -262,8 +263,9 @@ export async function updateEntryDetails(
     .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
     .eq("id", entryId)
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
   if (existingError) throw existingError;
+  if (!existingEntry) throw new Error("ENTRY_NOT_FOUND");
   const existing = existingEntry as DbEntryRow;
 
   const updatePayload: Record<string, unknown> = {
@@ -317,8 +319,9 @@ export async function deleteEntryById(userId: string, entryId: string): Promise<
     .select("id,title,type,status")
     .eq("id", entryId)
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();
   if (existingError) throw existingError;
+  if (!existingEntry) throw new Error("ENTRY_NOT_FOUND");
 
   const row = existingEntry as { id: string; title: string; type: "job" | "freelance"; status: string };
 

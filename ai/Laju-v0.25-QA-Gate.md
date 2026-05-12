@@ -63,3 +63,15 @@ Pass criteria:
 - `PASS`: all tests above pass with no cross-user leakage.
 - `BLOCKED`: env keys missing or migration not applied.
 - `FAIL`: any leakage, unauthorized write, or data-loss issue.
+
+## Latest Run (2026-05-12)
+- Result: `PASS` (API-level gate with real Supabase + configured env).
+- Evidence summary:
+  - User A create: `201`
+  - User B create: `201`
+  - User A patch/status/delete: `200`
+  - Cross-user patch/delete (B on A): `404`
+  - Settings put/get A: `200` with persisted values
+  - Settings get B: `200` with independent default values
+  - Export A/B: `200` for both users
+  - Final list A/B: `200` and isolated datasets

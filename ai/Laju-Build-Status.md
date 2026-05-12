@@ -333,3 +333,37 @@ Current gate: v0.1 tracker build with backend wiring almost complete.
 2. Verify Clerk user id mapping vs Supabase RLS claim.
 3. Execute two-user QA matrix in `ai/Laju-v0.25-QA-Gate.md`.
 4. Fix any discovered auth/RLS edge cases before invite rollout.
+
+## 2026-05-12 Eleventh Slice (v0.25 gate closeout)
+
+Current gate: v0.25 API-level invite readiness.
+
+## Completed
+- Set and activated Clerk + Supabase env in local runtime.
+- Confirmed auth readiness endpoint reports configured state.
+- Fixed middleware for local API QA header pass-through on `/api/*`.
+- Added robust not-found behavior for cross-user mutations:
+  - `PATCH/DELETE /api/entries/:entryId` now returns `404` when entry is outside user scope.
+- Completed live two-user API QA pass for:
+  - create/list/update/status/delete.
+  - settings put/get.
+  - CSV export.
+  - cross-user isolation checks.
+- Updated `ai/Laju-v0.25-QA-Gate.md` with PASS evidence.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Live API QA run:
+  - create A/B: `201`.
+  - update/status/delete own record: `200`.
+  - cross-user patch/delete: `404`.
+  - settings persistence and user separation: `200`.
+  - export per user: `200`.
+  - list isolation: `200` with separated datasets.
+
+## Status
+- v0.25 implementation + API QA gate: `PASS`.
+- Remaining non-code operational follow-up:
+  - run UI-sign-in manual smoke with real Clerk session.
+  - rotate exposed secrets after this setup session.
