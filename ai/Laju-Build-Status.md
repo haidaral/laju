@@ -550,3 +550,28 @@ Current gate: v0.61-v0.70 operations and reminder maturity.
 1. v0.71-v0.80: multi-workspace data model + saved views + bulk actions.
 2. v0.81-v0.90: permission hardening and audit-log enforcement.
 3. v0.91-v1.00: launch QA, runbooks, and release-candidate gate.
+
+## 2026-05-12 Eighteenth Slice (v0.71-v0.80 table operations)
+
+Current gate: v0.71-v0.80 operator productivity.
+
+## Completed
+- Added table-mode multi-select bulk operations in pipeline view:
+  - row-level checkboxes
+  - bulk status target selector
+  - apply status to selected rows
+  - clear selected rows
+- Added bulk-update completion notice and selection reset behavior after apply.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed after clean local restart cycle.
+- `GET /api/health`: `200`.
+
+## Notes
+- Local Next.js cache/runtime instability still appears intermittently and was handled using the established restart cycle.
+
+## Next
+1. v0.81-v0.90: enforce role boundaries and add audit hardening.
+2. v0.91-v1.00: full QA gate, runbooks, and release-candidate sign-off.

@@ -43,6 +43,7 @@ export default function Home() {
   const [operationNotice, setOperationNotice] = useState<OperationNotice>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: "idle" });
   const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
+  const [selectedPipelineEntryIds, setSelectedPipelineEntryIds] = useState<string[]>([]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -274,6 +275,17 @@ export default function Home() {
       },
       ...current
     ]);
+  }
+
+  async function bulkUpdateStatus(status: string) {
+    if (!selectedPipelineEntryIds.length) return;
+    for (const entryId of selectedPipelineEntryIds) {
+      const entry = entries.find((item) => sameId(item.id, entryId));
+      if (!entry || entry.status === status) continue;
+      await updateStatus(entry.id, status);
+    }
+    setSelectedPipelineEntryIds([]);
+    setOperationNotice({ type: "success", message: "Bulk status update applied." });
   }
 
   async function markFollowedUp(entryId: Entry["id"]) {
@@ -628,8 +640,11 @@ export default function Home() {
             view={pipelineView}
             setView={setPipelineView}
             updateStatus={updateStatus}
+            bulkUpdateStatus={bulkUpdateStatus}
             markFollowedUp={markFollowedUp}
             selectEntry={setSelectedEntry}
+            selectedEntryIds={selectedPipelineEntryIds}
+            setSelectedEntryIds={setSelectedPipelineEntryIds}
           />
         )}
 
@@ -848,8 +863,11 @@ function Pipeline({
   view,
   setView,
   updateStatus,
+  bulkUpdateStatus,
   markFollowedUp,
-  selectEntry
+  selectEntry,
+  selectedEntryIds,
+  setSelectedEntryIds
 }: {
   entries: Entry[];
   type: PipelineType;
@@ -858,12 +876,16 @@ function Pipeline({
   view: "kanban" | "table";
   setView: (value: "kanban" | "table") => void;
   updateStatus: (id: Entry["id"], status: string) => void;
+  bulkUpdateStatus: (status: string) => Promise<void>;
   markFollowedUp: (id: Entry["id"]) => void;
   selectEntry: (entry: Entry) => void;
+  selectedEntryIds: string[];
+  setSelectedEntryIds: (value: string[]) => void;
 }) {
   const stages = getStages(type);
   const pipelineEntries = entries.filter((entry) => entry.type === type && (filter === "All" || entry.platform === filter));
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
+  const [bulkStatus, setBulkStatus] = useState(stages[0] ?? "");
 
   function handleDrop(event: DragEvent<HTMLDivElement>, status: string) {
     const entryId = event.dataTransfer.getData("text/plain");
@@ -887,6 +909,25 @@ function Pipeline({
             <option key={platform}>{platform}</option>
           ))}
         </select>
+        {view === "table" && (
+          <div className="row-actions">
+            <select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)}>
+              {stages.map((stage) => (
+                <option key={stage}>{stage}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => void bulkUpdateStatus(bulkStatus)}
+              disabled={!selectedEntryIds.length}
+              title={!selectedEntryIds.length ? "Select entries first" : "Apply status to selected entries"}
+            >
+              Apply to {selectedEntryIds.length} selected
+            </button>
+            <button onClick={() => setSelectedEntryIds([])} disabled={!selectedEntryIds.length}>
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       {view === "kanban" ? (
@@ -922,6 +963,7 @@ function Pipeline({
           <table>
             <thead>
               <tr>
+                <th>Select</th>
                 <th>Opportunity</th>
                 <th>Platform</th>
                 <th>Status</th>
@@ -932,6 +974,20 @@ function Pipeline({
             <tbody>
               {pipelineEntries.map((entry) => (
                 <tr key={entry.id} onClick={() => selectEntry(entry)}>
+                  <td onClick={(event) => event.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedEntryIds.includes(String(entry.id))}
+                      onChange={(event) => {
+                        const id = String(entry.id);
+                        if (event.target.checked) {
+                          setSelectedEntryIds([...selectedEntryIds, id]);
+                        } else {
+                          setSelectedEntryIds(selectedEntryIds.filter((value) => value !== id));
+                        }
+                      }}
+                    />
+                  </td>
                   <td>
                     <strong>{entry.title}</strong>
                     <span>{entry.company}</span>
