@@ -624,3 +624,27 @@ Current gate: v0.91-v1.00 release candidate.
 ## Remaining to declare `v1.0`
 1. Execute full signed-in browser manual QA against checklist and capture evidence.
 2. Confirm final release sign-offs and tag `v1.0.0`.
+
+## 2026-05-12 Twenty-first Slice (v1 gate automation boost)
+
+Current gate: v1 release evidence strengthening.
+
+## Completed
+- Added UI smoke regression runner:
+  - `scripts/qa-ui.mjs`
+  - command: `npm run qa:ui`
+- Added non-production middleware bypass header for local E2E:
+  - `x-laju-e2e-bypass: true` on `/`
+- Added auth-state-tolerant smoke behavior:
+  - core path checks always run
+  - create/pipeline/settings checks run when UI controls are available
+  - health endpoint fallback validation when settings controls are not exposed in current auth state
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed (clean sequence with dev stopped).
+- `npm run qa:ui`: passed.
+
+## Remaining to declare `v1.0`
+1. Signed-in manual browser QA with real Clerk session against `ai/Laju-v1.00-Release-Candidate.md`.
+2. Final product + engineering sign-off and version tag.

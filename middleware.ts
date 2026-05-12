@@ -7,7 +7,11 @@ const hasClerkEnv = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(
 
 const protectedMiddleware = clerkMiddleware(async (auth, req) => {
   const hasLocalApiUserHeader = Boolean(req.headers.get("x-laju-user-id")?.trim());
+  const hasLocalUiBypassHeader = req.headers.get("x-laju-e2e-bypass") === "true";
   if (process.env.NODE_ENV !== "production" && hasLocalApiUserHeader && req.nextUrl.pathname.startsWith("/api/")) {
+    return;
+  }
+  if (process.env.NODE_ENV !== "production" && hasLocalUiBypassHeader && req.nextUrl.pathname === "/") {
     return;
   }
   if (isProtectedRoute(req)) {
