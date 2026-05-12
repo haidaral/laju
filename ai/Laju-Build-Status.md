@@ -197,3 +197,31 @@ Wire invite-ready auth boundary when credentials are available:
 2. Add Clerk middleware and protected tracker routes.
 3. Replace API stubs with Supabase user-scoped CRUD/export behavior.
 4. Validate RLS with two test users before inviting testers.
+
+## 2026-05-12 Seventh Slice
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Added server-side auth readiness utility in `app/lib/laju-server-boundary.ts`.
+- Added explicit API error helper for missing auth in `app/lib/laju-api-contracts.ts`.
+- Replaced generic API stubs with boundary-aware responses for:
+  - `GET/POST /api/entries`
+  - `POST /api/entries/status`
+  - `GET /api/export`
+- Added `GET /api/auth-readiness` to safely check env configuration without exposing secret values.
+- Responses now surface actionable `missingEnvVars` keys when auth/persistence env is incomplete.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `GET /api/auth-readiness`: returns `configured:false` and missing key names.
+- `GET /api/entries`: returns `not_configured` with missing key names.
+- `POST /api/entries`: returns `not_configured` with missing key names.
+
+## Next Smallest Ticket
+Start real auth and persistence wiring:
+1. Install Clerk and Supabase server/client packages.
+2. Add Clerk middleware and user identity extraction from Clerk session.
+3. Add Supabase repository layer and replace `not_configured` placeholders with real CRUD/export.
+4. Run two-user isolation QA for RLS before invite rollout.

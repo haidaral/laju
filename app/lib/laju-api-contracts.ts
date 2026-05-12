@@ -17,6 +17,7 @@ export type EntriesResponse = {
 export type ApiErrorResponse = {
   error: string;
   code: "missing_auth" | "not_configured" | "validation_error" | "server_error";
+  details?: Record<string, unknown>;
 };
 
 export function apiNotConfigured(feature: string): Response {
@@ -26,5 +27,15 @@ export function apiNotConfigured(feature: string): Response {
       code: "not_configured"
     } satisfies ApiErrorResponse,
     { status: 501 }
+  );
+}
+
+export function apiMissingAuth(feature: string): Response {
+  return Response.json(
+    {
+      error: `${feature} requires authentication. Configure Clerk and include an authenticated user context.`,
+      code: "missing_auth"
+    } satisfies ApiErrorResponse,
+    { status: 401 }
   );
 }
