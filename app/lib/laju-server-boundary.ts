@@ -1,4 +1,5 @@
 import { apiMissingAuth, type ApiErrorResponse } from "./laju-api-contracts";
+import { auth } from "@clerk/nextjs/server";
 
 const REQUIRED_ENV_VARS = [
   "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
@@ -28,6 +29,14 @@ export function getRequestUserId(request: Request): string | null {
   return fromHeader ? fromHeader : null;
 }
 
+export async function getServerUserId(request: Request): Promise<string | null> {
+  const clerkAuth = await auth();
+  if (clerkAuth.userId) {
+    return clerkAuth.userId;
+  }
+  return getRequestUserId(request);
+}
+
 export function authNotConfigured(feature: string, missingEnvVars: string[]): Response {
   return Response.json(
     {
@@ -39,8 +48,8 @@ export function authNotConfigured(feature: string, missingEnvVars: string[]): Re
   );
 }
 
-export function requireUserContext(request: Request, feature: string): Response | null {
-  const userId = getRequestUserId(request);
+export async function requireUserContext(request: Request, feature: string): Promise<Response | null> {
+  const userId = await getServerUserId(request);
   if (!userId) {
     return apiMissingAuth(feature);
   }

@@ -5,7 +5,7 @@ export async function GET(request: Request) {
   if (!readiness.configured) {
     return authNotConfigured("Server-side export API", readiness.missingEnvVars);
   }
-  const authError = requireUserContext(request, "Server-side export API");
+  const authError = await requireUserContext(request, "Server-side export API");
   if (authError) return authError;
   return Response.json(
     { error: "Server-side export API is auth-ready but data persistence is not wired yet.", code: "not_configured" },

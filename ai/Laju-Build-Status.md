@@ -225,3 +225,38 @@ Start real auth and persistence wiring:
 2. Add Clerk middleware and user identity extraction from Clerk session.
 3. Add Supabase repository layer and replace `not_configured` placeholders with real CRUD/export.
 4. Run two-user isolation QA for RLS before invite rollout.
+
+## 2026-05-12 Eighth Slice
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Installed auth/data packages:
+  - `@clerk/nextjs`
+  - `@supabase/supabase-js`
+  - `@supabase/ssr`
+- Aligned React patch versions for Clerk compatibility:
+  - `react` `19.1.4`
+  - `react-dom` `19.1.4`
+- Added `middleware.ts` with protected-route intent for:
+  - `/`
+  - `/api/entries*`
+  - `/api/export*`
+- Added safe middleware bypass when Clerk env keys are missing, so local dev does not crash before configuration.
+- Updated `app/layout.tsx` to use `ClerkProvider` only when Clerk publishable key exists.
+- Updated API user-context resolver to read Clerk server identity first, then local header fallback for controlled local testing.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `GET /`: 200 after clean restart.
+- `GET /api/auth-readiness`: returns `configured:false` + missing key names.
+- `GET /api/entries`: returns `not_configured` + missing key names.
+- Resolved prior runtime failure: `@clerk/backend: Missing publishableKey`.
+
+## Next Smallest Ticket
+Add Supabase repository wiring (still behind auth readiness):
+1. Build server-side Supabase client helper.
+2. Implement `entries` and `activity_log` read/write functions.
+3. Replace API placeholder responses with real DB reads/writes under user scope.
+4. Keep current fallback behavior untouched until DB path passes QA.

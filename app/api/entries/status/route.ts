@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   if (!readiness.configured) {
     return authNotConfigured("Entry status API", readiness.missingEnvVars);
   }
-  const authError = requireUserContext(request, "Entry status API");
+  const authError = await requireUserContext(request, "Entry status API");
   if (authError) return authError;
   return Response.json({ error: "Entry status API is auth-ready but data persistence is not wired yet.", code: "not_configured" }, { status: 501 });
 }

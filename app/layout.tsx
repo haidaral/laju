@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import "./public-pages.css";
 
@@ -12,9 +13,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const hasClerkEnv = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim());
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{hasClerkEnv ? <ClerkProvider>{children}</ClerkProvider> : children}</body>
     </html>
   );
 }
