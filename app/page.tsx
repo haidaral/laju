@@ -44,6 +44,7 @@ export default function Home() {
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: "idle" });
   const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
   const [selectedPipelineEntryIds, setSelectedPipelineEntryIds] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<UserRole>("owner");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -54,17 +55,20 @@ export default function Home() {
           setEntries(parsed.entries ?? []);
           setActivityLog(parsed.activityLog ?? []);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
+          setUserRole(parsed.role ?? "owner");
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
           setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
+          setUserRole(parsed.role ?? "owner");
           setMode("sample");
         }
       } catch {
         setEntries(initialEntries);
         setActivityLog(initialActivityLog);
         setSnoozedUntilMap({});
+        setUserRole("owner");
         setMode("sample");
       }
     }
@@ -74,8 +78,8 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
     if (dataMode !== "local") return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode, snoozedUntilMap }));
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap]);
+    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole }));
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole]);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +153,10 @@ export default function Home() {
   }, [operationNotice]);
 
   async function saveCloudSettings(next: CloudSettings) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot modify settings." });
+      return;
+    }
     if (dataMode !== "cloud") return;
     setSettingsStatus("saving");
     try {
@@ -230,6 +238,10 @@ export default function Home() {
   );
 
   async function updateStatus(entryId: Entry["id"], status: string) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot modify entries." });
+      return;
+    }
     const entryBeforeUpdate = entries.find((entry) => entry.id === entryId);
     if (!entryBeforeUpdate || entryBeforeUpdate.status === status) return;
 
@@ -289,6 +301,10 @@ export default function Home() {
   }
 
   async function markFollowedUp(entryId: Entry["id"]) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot modify entries." });
+      return;
+    }
     const entryBeforeUpdate = entries.find((entry) => entry.id === entryId);
     if (!entryBeforeUpdate) return;
 
@@ -373,6 +389,10 @@ export default function Home() {
   }
 
   async function updateEntry(updatedEntry: Entry) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot modify entries." });
+      return;
+    }
     const existingEntry = entries.find((entry) => entry.id === updatedEntry.id);
     if (!existingEntry) return;
 
@@ -416,6 +436,10 @@ export default function Home() {
   }
 
   async function deleteEntry(entryId: Entry["id"]) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot modify entries." });
+      return;
+    }
     const entryToDelete = entries.find((entry) => entry.id === entryId);
     if (!entryToDelete) return;
 
@@ -453,6 +477,10 @@ export default function Home() {
   }
 
   async function addEntry(formData: FormData) {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot add entries." });
+      return;
+    }
     const type = formData.get("type") as PipelineType;
     const title = String(formData.get("title") || "").trim();
     const company = String(formData.get("company") || "").trim();
@@ -512,6 +540,10 @@ export default function Home() {
   }
 
   function startEmptyMode() {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot reset data modes." });
+      return;
+    }
     setEntries([]);
     setActivityLog([]);
     setSnoozedUntilMap({});
@@ -520,6 +552,10 @@ export default function Home() {
   }
 
   function useSampleData() {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot reset data modes." });
+      return;
+    }
     setEntries(initialEntries);
     setActivityLog(initialActivityLog);
     setSnoozedUntilMap({});
@@ -578,6 +614,11 @@ export default function Home() {
             <h1>{viewTitle(activeView)}</h1>
           </div>
           <div className="row-actions">
+            <select value={userRole} onChange={(event) => setUserRole(event.target.value as UserRole)}>
+              <option value="owner">Owner</option>
+              <option value="member">Member</option>
+              <option value="viewer">Viewer</option>
+            </select>
             {authLoaded && isSignedIn ? (
               <UserButton />
             ) : (
@@ -585,7 +626,7 @@ export default function Home() {
                 <button>Sign In</button>
               </SignInButton>
             )}
-            <button className="primary" onClick={() => setIsCreating(true)}>
+            <button className="primary" onClick={() => setIsCreating(true)} disabled={userRole === "viewer"}>
               Add Entry
             </button>
           </div>
@@ -666,6 +707,7 @@ export default function Home() {
             setEmptyMode={startEmptyMode}
             setSampleMode={useSampleData}
             mode={mode}
+            role={userRole}
             logCsvExport={logCsvExport}
             dataMode={dataMode}
             cloudSettings={cloudSettings}
@@ -677,6 +719,10 @@ export default function Home() {
             snoozedEntriesCount={snoozedEntriesCount}
             cloudDataStatus={cloudDataStatus}
             resetLocalData={() => {
+              if (userRole === "viewer") {
+                setOperationNotice({ type: "error", message: "Viewer role cannot reset data." });
+                return;
+              }
               setEntries(initialEntries);
               setActivityLog(initialActivityLog);
               setSnoozedUntilMap({});
@@ -1117,6 +1163,7 @@ function Settings({
   setEmptyMode,
   setSampleMode,
   mode,
+  role,
   logCsvExport,
   dataMode,
   cloudSettings,
@@ -1134,6 +1181,7 @@ function Settings({
   setEmptyMode: () => void;
   setSampleMode: () => void;
   mode: "sample" | "empty";
+  role: UserRole;
   logCsvExport: () => void;
   dataMode: DataMode;
   cloudSettings: CloudSettings;
@@ -1225,6 +1273,7 @@ function Settings({
           <p>Choose validation mode for first-run behavior</p>
         </div>
         <p className="helper">Current mode: {mode === "empty" ? "Empty" : "Sample data"}</p>
+        <p className="helper">Active role: {role}</p>
         <div className="row-actions">
           <button onClick={setSampleMode}>Use Sample Data</button>
           <button onClick={setEmptyMode}>Start Empty</button>
@@ -1427,6 +1476,7 @@ type GateAStats = {
 };
 
 type DataMode = "local" | "cloud";
+type UserRole = "owner" | "member" | "viewer";
 type CloudSettings = {
   jobReminderDays: number;
   freelanceReminderDays: number;

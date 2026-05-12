@@ -575,3 +575,31 @@ Current gate: v0.71-v0.80 operator productivity.
 ## Next
 1. v0.81-v0.90: enforce role boundaries and add audit hardening.
 2. v0.91-v1.00: full QA gate, runbooks, and release-candidate sign-off.
+
+## 2026-05-12 Nineteenth Slice (v0.81-v0.90 role boundaries)
+
+Current gate: v0.81-v0.90 access and control hardening.
+
+## Completed
+- Added in-app role selector (`owner/member/viewer`).
+- Added write-protection enforcement for `viewer` role across:
+  - add entry
+  - update status
+  - follow-up
+  - edit/delete entry
+  - settings save
+  - mode reset and local reset controls
+- Added role persistence in local state payload.
+- Added role visibility in Settings for operational clarity.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed after clean local restart cycle.
+- `GET /api/health`: `200`.
+
+## Notes
+- Next dev runtime/cache instability remains an environment-level issue and still requires occasional clean restart during QA.
+
+## Next
+1. v0.91-v1.00: finalize runbooks/checklists + complete manual signed-in browser QA + release-candidate sign-off.

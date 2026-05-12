@@ -42,6 +42,7 @@ export type LajuLocalState = {
   activityLog: ActivityLog[];
   mode?: "sample" | "empty";
   snoozedUntilMap?: Record<string, string>;
+  role?: "owner" | "member" | "viewer";
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];
