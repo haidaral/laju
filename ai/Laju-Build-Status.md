@@ -648,3 +648,30 @@ Current gate: v1 release evidence strengthening.
 ## Remaining to declare `v1.0`
 1. Signed-in manual browser QA with real Clerk session against `ai/Laju-v1.00-Release-Candidate.md`.
 2. Final product + engineering sign-off and version tag.
+
+## 2026-05-12 Twenty-second Slice (v1.10 input speed + design consistency)
+
+Current gate: v1 post-launch speed and usability.
+
+## Completed
+- Added `Quick Capture` panel for fast entry creation without opening the full drawer:
+  - pipeline selector
+  - title
+  - company/client
+  - platform
+  - quick add action
+- Added duplicate hint for matching title + company in the same pipeline.
+- Refined layout hierarchy and consistency:
+  - cleaner topbar flow
+  - stronger heading/metric sizing
+  - improved quick panel spacing
+  - more coherent primary-action visibility styling
+- Preserved role guard behavior (`viewer` cannot write).
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+## Next
+1. v1.20: CSV import wizard (preview + mapping + conflict handling).
+2. v1.30: saved personal views (filters/layout) with one-click switching.

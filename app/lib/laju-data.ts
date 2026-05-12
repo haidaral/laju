@@ -43,6 +43,9 @@ export type LajuLocalState = {
   mode?: "sample" | "empty";
   snoozedUntilMap?: Record<string, string>;
   role?: "owner" | "member" | "viewer";
+  uiPreset?: "notion" | "trello" | "asana" | "github";
+  compactMode?: boolean;
+  darkMode?: boolean;
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];

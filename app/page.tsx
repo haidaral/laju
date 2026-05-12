@@ -45,6 +45,14 @@ export default function Home() {
   const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
   const [selectedPipelineEntryIds, setSelectedPipelineEntryIds] = useState<string[]>([]);
   const [userRole, setUserRole] = useState<UserRole>("owner");
+  const [uiPreset, setUiPreset] = useState<UiPreset>("notion");
+  const [compactMode, setCompactMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [quickType, setQuickType] = useState<PipelineType>("job");
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickCompany, setQuickCompany] = useState("");
+  const [quickPlatform, setQuickPlatform] = useState("Direct");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -56,12 +64,18 @@ export default function Home() {
           setActivityLog(parsed.activityLog ?? []);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setUserRole(parsed.role ?? "owner");
+          setUiPreset(parsed.uiPreset ?? "notion");
+          setCompactMode(Boolean(parsed.compactMode));
+          setDarkMode(Boolean(parsed.darkMode));
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
           setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setUserRole(parsed.role ?? "owner");
+          setUiPreset(parsed.uiPreset ?? "notion");
+          setCompactMode(Boolean(parsed.compactMode));
+          setDarkMode(Boolean(parsed.darkMode));
           setMode("sample");
         }
       } catch {
@@ -69,6 +83,9 @@ export default function Home() {
         setActivityLog(initialActivityLog);
         setSnoozedUntilMap({});
         setUserRole("owner");
+        setUiPreset("notion");
+        setCompactMode(false);
+        setDarkMode(false);
         setMode("sample");
       }
     }
@@ -78,8 +95,11 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
     if (dataMode !== "local") return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole }));
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole]);
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole, uiPreset, compactMode, darkMode })
+    );
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode]);
 
   useEffect(() => {
     let active = true;
@@ -539,6 +559,38 @@ export default function Home() {
     setOperationNotice({ type: "success", message: "Entry created." });
   }
 
+  async function quickCaptureEntry() {
+    if (userRole === "viewer") {
+      setOperationNotice({ type: "error", message: "Viewer role cannot add entries." });
+      return;
+    }
+    const title = quickTitle.trim();
+    const company = quickCompany.trim();
+    if (title.length < 2 || company.length < 2) {
+      setOperationNotice({ type: "error", message: "Quick capture needs title and company." });
+      return;
+    }
+    const payload = new FormData();
+    payload.set("type", quickType);
+    payload.set("title", title);
+    payload.set("company", company);
+    payload.set("platform", quickPlatform.trim() || "Direct");
+    payload.set("location", "Remote");
+    payload.set("currency", cloudSettings.currency);
+    payload.set("value", "TBD");
+    payload.set("notes", "");
+    await addEntry(payload);
+    setQuickTitle("");
+    setQuickCompany("");
+  }
+
+  const quickCaptureDuplicate = entries.some(
+    (entry) =>
+      entry.type === quickType &&
+      entry.title.toLowerCase() === quickTitle.trim().toLowerCase() &&
+      entry.company.toLowerCase() === quickCompany.trim().toLowerCase()
+  );
+
   function startEmptyMode() {
     if (userRole === "viewer") {
       setOperationNotice({ type: "error", message: "Viewer role cannot reset data modes." });
@@ -577,7 +629,7 @@ export default function Home() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell preset-${uiPreset}${compactMode ? " compact-ui" : ""}${darkMode ? " dark-ui" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">L</div>
@@ -614,6 +666,7 @@ export default function Home() {
             <h1>{viewTitle(activeView)}</h1>
           </div>
           <div className="row-actions">
+            <button onClick={() => setShowCustomize((value) => !value)}>{showCustomize ? "Close Customize" : "Customize"}</button>
             <select value={userRole} onChange={(event) => setUserRole(event.target.value as UserRole)}>
               <option value="owner">Owner</option>
               <option value="member">Member</option>
@@ -631,6 +684,33 @@ export default function Home() {
             </button>
           </div>
         </header>
+        {showCustomize && (
+          <section className="panel customize-panel">
+            <div className="section-heading">
+              <h2>Customize workspace</h2>
+              <p>Pick familiar style and density</p>
+            </div>
+            <div className="row-actions">
+              <label>
+                Preset
+                <select value={uiPreset} onChange={(event) => setUiPreset(event.target.value as UiPreset)}>
+                  <option value="notion">Notion</option>
+                  <option value="trello">Trello</option>
+                  <option value="asana">Asana</option>
+                  <option value="github">GitHub</option>
+                </select>
+              </label>
+              <label className="toggle-pill">
+                <input type="checkbox" checked={compactMode} onChange={(event) => setCompactMode(event.target.checked)} />
+                Compact density
+              </label>
+              <label className="toggle-pill">
+                <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
+                Dark mode
+              </label>
+            </div>
+          </section>
+        )}
 
         {dataMode === "cloud" && authLoaded && !isSignedIn && (
           <section className="panel">
@@ -658,6 +738,37 @@ export default function Home() {
             {operationNotice.message}
           </section>
         )}
+        <section className="panel quick-capture-panel">
+          <div className="section-heading">
+            <h2>Quick Capture</h2>
+            <p>Add opportunities in under 10 seconds</p>
+          </div>
+          <div className="quick-capture-grid">
+            <label>
+              Pipeline
+              <select value={quickType} onChange={(event) => setQuickType(event.target.value as PipelineType)}>
+                <option value="job">Job</option>
+                <option value="freelance">Freelance</option>
+              </select>
+            </label>
+            <label>
+              Title
+              <input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="Role or project" />
+            </label>
+            <label>
+              Company/Client
+              <input value={quickCompany} onChange={(event) => setQuickCompany(event.target.value)} placeholder="Company or client" />
+            </label>
+            <label>
+              Platform
+              <input value={quickPlatform} onChange={(event) => setQuickPlatform(event.target.value)} placeholder="Direct, LinkedIn..." />
+            </label>
+            <button className="primary" onClick={() => void quickCaptureEntry()} disabled={userRole === "viewer"}>
+              Quick Add
+            </button>
+          </div>
+          {quickCaptureDuplicate && <p className="helper">Potential duplicate detected for this title and company.</p>}
+        </section>
 
         {activeView === "overview" && (
           <Overview
@@ -708,6 +819,12 @@ export default function Home() {
             setSampleMode={useSampleData}
             mode={mode}
             role={userRole}
+            uiPreset={uiPreset}
+            setUiPreset={setUiPreset}
+            compactMode={compactMode}
+            setCompactMode={setCompactMode}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
             logCsvExport={logCsvExport}
             dataMode={dataMode}
             cloudSettings={cloudSettings}
@@ -1164,6 +1281,12 @@ function Settings({
   setSampleMode,
   mode,
   role,
+  uiPreset,
+  setUiPreset,
+  compactMode,
+  setCompactMode,
+  darkMode,
+  setDarkMode,
   logCsvExport,
   dataMode,
   cloudSettings,
@@ -1182,6 +1305,12 @@ function Settings({
   setSampleMode: () => void;
   mode: "sample" | "empty";
   role: UserRole;
+  uiPreset: UiPreset;
+  setUiPreset: (preset: UiPreset) => void;
+  compactMode: boolean;
+  setCompactMode: (value: boolean) => void;
+  darkMode: boolean;
+  setDarkMode: (value: boolean) => void;
   logCsvExport: () => void;
   dataMode: DataMode;
   cloudSettings: CloudSettings;
@@ -1267,6 +1396,29 @@ function Settings({
 
   return (
     <section className="settings-grid">
+      <div className="panel">
+        <div className="section-heading">
+          <h2>Interface style</h2>
+          <p>Familiar productivity presets by team preference</p>
+        </div>
+        <label>
+          Design preset
+          <select value={uiPreset} onChange={(event) => setUiPreset(event.target.value as UiPreset)}>
+            <option value="notion">Notion-style</option>
+            <option value="trello">Trello-style</option>
+            <option value="asana">Asana-style</option>
+            <option value="github">GitHub-style</option>
+          </select>
+        </label>
+        <label className="toggle-row">
+          <input type="checkbox" checked={compactMode} onChange={(event) => setCompactMode(event.target.checked)} />
+          Compact density
+        </label>
+        <label className="toggle-row">
+          <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
+          Dark mode
+        </label>
+      </div>
       <div className="panel">
         <div className="section-heading">
           <h2>Onboarding mode</h2>
@@ -1477,6 +1629,7 @@ type GateAStats = {
 
 type DataMode = "local" | "cloud";
 type UserRole = "owner" | "member" | "viewer";
+type UiPreset = "notion" | "trello" | "asana" | "github";
 type CloudSettings = {
   jobReminderDays: number;
   freelanceReminderDays: number;
