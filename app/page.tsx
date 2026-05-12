@@ -15,6 +15,7 @@ import {
   type Entry,
   type LajuLocalState,
   type PipelineType,
+  type SavedView,
   type ViewKey
 } from "./lib/laju-data";
 
@@ -42,6 +43,7 @@ export default function Home() {
   const [cloudDataStatus, setCloudDataStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [operationNotice, setOperationNotice] = useState<OperationNotice>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: "idle" });
+  const [healthCheckedAt, setHealthCheckedAt] = useState("");
   const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
   const [selectedPipelineEntryIds, setSelectedPipelineEntryIds] = useState<string[]>([]);
   const [userRole, setUserRole] = useState<UserRole>("owner");
@@ -49,6 +51,7 @@ export default function Home() {
   const [compactMode, setCompactMode] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [quickType, setQuickType] = useState<PipelineType>("job");
   const [quickTitle, setQuickTitle] = useState("");
   const [quickCompany, setQuickCompany] = useState("");
@@ -67,6 +70,7 @@ export default function Home() {
           setUiPreset(parsed.uiPreset ?? "notion");
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
+          setSavedViews(parsed.savedViews ?? []);
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
@@ -76,6 +80,7 @@ export default function Home() {
           setUiPreset(parsed.uiPreset ?? "notion");
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
+          setSavedViews(parsed.savedViews ?? []);
           setMode("sample");
         }
       } catch {
@@ -86,6 +91,7 @@ export default function Home() {
         setUiPreset("notion");
         setCompactMode(false);
         setDarkMode(false);
+        setSavedViews([]);
         setMode("sample");
       }
     }
@@ -97,9 +103,9 @@ export default function Home() {
     if (dataMode !== "local") return;
     window.localStorage.setItem(
       storageKey,
-      JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole, uiPreset, compactMode, darkMode })
+      JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole, uiPreset, compactMode, darkMode, savedViews })
     );
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode]);
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews]);
 
   useEffect(() => {
     let active = true;
@@ -206,6 +212,7 @@ export default function Home() {
       const response = await fetch("/api/health", { cache: "no-store" });
       if (!response.ok) {
         setHealthStatus({ status: "error", message: "Health endpoint is unavailable." });
+        setHealthCheckedAt(new Date().toISOString());
         return;
       }
       const payload = (await response.json()) as {
@@ -214,15 +221,19 @@ export default function Home() {
       };
       if (!payload.auth.configured) {
         setHealthStatus({ status: "error", message: "Auth environment is not configured." });
+        setHealthCheckedAt(new Date().toISOString());
         return;
       }
       if (!payload.db.ok) {
         setHealthStatus({ status: "error", message: payload.db.error ?? "Database is not reachable." });
+        setHealthCheckedAt(new Date().toISOString());
         return;
       }
       setHealthStatus({ status: "ok", message: "Auth and database are healthy." });
+      setHealthCheckedAt(new Date().toISOString());
     } catch {
       setHealthStatus({ status: "error", message: "Health check failed." });
+      setHealthCheckedAt(new Date().toISOString());
     }
   }
 
@@ -255,6 +266,21 @@ export default function Home() {
       { label: "Export your CSV once", done: activityLog.some((activity) => activity.action === "csv_exported") }
     ],
     [activityLog, entries.length]
+  );
+  const topInsights = useMemo(
+    () =>
+      entries
+        .filter((entry) => !isTerminal(entry))
+        .map((entry) => {
+          const staleDays = daysSince(entry.lastUpdated);
+          const score = Math.max(1, 100 - staleDays * 3 + (entry.type === "freelance" ? 5 : 0));
+          const threshold = entry.type === "job" ? cloudSettings.jobReminderDays : cloudSettings.freelanceReminderDays;
+          const nextAction = staleDays >= threshold ? "Follow up today" : staleDays >= 3 ? "Review this week" : "Keep momentum";
+          return { entry, score, nextAction };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5),
+    [cloudSettings.freelanceReminderDays, cloudSettings.jobReminderDays, entries]
   );
 
   async function updateStatus(entryId: Entry["id"], status: string) {
@@ -318,6 +344,32 @@ export default function Home() {
     }
     setSelectedPipelineEntryIds([]);
     setOperationNotice({ type: "success", message: "Bulk status update applied." });
+  }
+
+  function savePipelineView(type: PipelineType, name: string) {
+    const clean = name.trim();
+    if (!clean) return;
+    const next: SavedView = {
+      id: `${Date.now()}`,
+      name: clean,
+      type,
+      filter,
+      view: pipelineView
+    };
+    setSavedViews((current) => [next, ...current].slice(0, 12));
+    setOperationNotice({ type: "success", message: "View saved." });
+  }
+
+  function applyPipelineView(view: SavedView) {
+    setFilter(view.filter);
+    setPipelineView(view.view);
+    setActiveView(view.type === "job" ? "jobs" : "freelance");
+    setOperationNotice({ type: "success", message: `View loaded: ${view.name}` });
+  }
+
+  function deletePipelineView(viewId: string) {
+    setSavedViews((current) => current.filter((view) => view.id !== viewId));
+    setOperationNotice({ type: "success", message: "Saved view removed." });
   }
 
   async function markFollowedUp(entryId: Entry["id"]) {
@@ -778,6 +830,7 @@ export default function Home() {
             winRate={winRate}
             recentActivity={recentActivity}
             gateAStats={gateAStats}
+            topInsights={topInsights}
             onboardingTasks={onboardingTasks}
             mode={mode}
           />
@@ -793,6 +846,10 @@ export default function Home() {
             setView={setPipelineView}
             updateStatus={updateStatus}
             bulkUpdateStatus={bulkUpdateStatus}
+            savedViews={savedViews}
+            savePipelineView={savePipelineView}
+            applyPipelineView={applyPipelineView}
+            deletePipelineView={deletePipelineView}
             markFollowedUp={markFollowedUp}
             selectEntry={setSelectedEntry}
             selectedEntryIds={selectedPipelineEntryIds}
@@ -831,7 +888,58 @@ export default function Home() {
             settingsStatus={settingsStatus}
             onSaveCloudSettings={saveCloudSettings}
             healthStatus={healthStatus}
+            healthCheckedAt={healthCheckedAt}
             onCheckCloudHealth={checkCloudHealth}
+            onImportCsv={async (rows) => {
+              if (userRole === "viewer") {
+                setOperationNotice({ type: "error", message: "Viewer role cannot import entries." });
+                return;
+              }
+              let imported = 0;
+              for (const row of rows) {
+                const normalizedType: PipelineType = row.type === "freelance" ? "freelance" : "job";
+                const entry: Entry = {
+                  id: Date.now() + imported,
+                  type: normalizedType,
+                  title: row.title,
+                  company: row.company,
+                  platform: row.platform || "Direct",
+                  status: row.status || (normalizedType === "job" ? "Applied" : "Lead"),
+                  location: row.location || "Remote",
+                  workType: row.workType === "Hybrid" || row.workType === "Onsite" ? row.workType : "Remote",
+                  currency: row.currency === "USD" ? "USD" : "IDR",
+                  value: row.value || "TBD",
+                  lastUpdated: row.lastUpdated || currentDate,
+                  notes: row.notes || ""
+                };
+                if (dataMode === "cloud") {
+                  const response = await fetch("/api/entries", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(entry)
+                  });
+                  if (!response.ok) continue;
+                  const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
+                  setEntries((current) => [payload.entry, ...current]);
+                  setActivityLog((current) => [payload.activity, ...current]);
+                } else {
+                  setEntries((current) => [entry, ...current]);
+                  setActivityLog((current) => [
+                    {
+                      id: Date.now() + imported,
+                      entryId: entry.id,
+                      action: "created",
+                      newStatus: entry.status,
+                      note: `${entry.title} imported to ${entry.type} pipeline.`,
+                      createdAt: currentDate
+                    },
+                    ...current
+                  ]);
+                }
+                imported += 1;
+              }
+              setOperationNotice({ type: "success", message: `Imported ${imported} entries.` });
+            }}
             staleEntriesCount={staleEntries.length}
             snoozedEntriesCount={snoozedEntriesCount}
             cloudDataStatus={cloudDataStatus}
@@ -883,6 +991,7 @@ function Overview({
   winRate,
   recentActivity,
   gateAStats,
+  topInsights,
   onboardingTasks,
   mode
 }: {
@@ -892,6 +1001,7 @@ function Overview({
   winRate: number;
   recentActivity: ActivityLog[];
   gateAStats: GateAStats;
+  topInsights: Array<{ entry: Entry; score: number; nextAction: string }>;
   onboardingTasks: Array<{ label: string; done: boolean }>;
   mode: "sample" | "empty";
 }) {
@@ -981,6 +1091,30 @@ function Overview({
         </div>
       </section>
 
+      <section className="panel">
+        <div className="section-heading">
+          <h2>AI cues</h2>
+          <p>Priority ranking and recommended next action</p>
+        </div>
+        <div className="activity-list">
+          {topInsights.length ? (
+            topInsights.map((item) => (
+              <div className="activity-row" key={item.entry.id}>
+                <div>
+                  <strong>
+                    {item.entry.title} - {item.entry.company}
+                  </strong>
+                  <span>{item.nextAction}</span>
+                </div>
+                <em>Score {item.score}</em>
+              </div>
+            ))
+          ) : (
+            <p className="empty">No active opportunities to rank yet.</p>
+          )}
+        </div>
+      </section>
+
       <section className="panel alert-panel">
         <div className="section-heading">
           <h2>Needs attention</h2>
@@ -1027,6 +1161,10 @@ function Pipeline({
   setView,
   updateStatus,
   bulkUpdateStatus,
+  savedViews,
+  savePipelineView,
+  applyPipelineView,
+  deletePipelineView,
   markFollowedUp,
   selectEntry,
   selectedEntryIds,
@@ -1040,6 +1178,10 @@ function Pipeline({
   setView: (value: "kanban" | "table") => void;
   updateStatus: (id: Entry["id"], status: string) => void;
   bulkUpdateStatus: (status: string) => Promise<void>;
+  savedViews: SavedView[];
+  savePipelineView: (type: PipelineType, name: string) => void;
+  applyPipelineView: (view: SavedView) => void;
+  deletePipelineView: (viewId: string) => void;
   markFollowedUp: (id: Entry["id"]) => void;
   selectEntry: (entry: Entry) => void;
   selectedEntryIds: string[];
@@ -1049,6 +1191,8 @@ function Pipeline({
   const pipelineEntries = entries.filter((entry) => entry.type === type && (filter === "All" || entry.platform === filter));
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
   const [bulkStatus, setBulkStatus] = useState(stages[0] ?? "");
+  const [viewName, setViewName] = useState("");
+  const typeViews = savedViews.filter((saved) => saved.type === type);
 
   function handleDrop(event: DragEvent<HTMLDivElement>, status: string) {
     const entryId = event.dataTransfer.getData("text/plain");
@@ -1072,6 +1216,33 @@ function Pipeline({
             <option key={platform}>{platform}</option>
           ))}
         </select>
+        <div className="row-actions">
+          <input value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="Save current view" />
+          <button
+            onClick={() => {
+              savePipelineView(type, viewName);
+              setViewName("");
+            }}
+          >
+            Save View
+          </button>
+          <select onChange={(event) => {
+            const target = typeViews.find((saved) => saved.id === event.target.value);
+            if (target) applyPipelineView(target);
+          }} value="">
+            <option value="">Load View</option>
+            {typeViews.map((saved) => (
+              <option key={saved.id} value={saved.id}>
+                {saved.name}
+              </option>
+            ))}
+          </select>
+          {typeViews[0] && (
+            <button onClick={() => deletePipelineView(typeViews[0].id)} title="Delete newest saved view">
+              Delete Latest
+            </button>
+          )}
+        </div>
         {view === "table" && (
           <div className="row-actions">
             <select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)}>
@@ -1293,7 +1464,9 @@ function Settings({
   settingsStatus,
   onSaveCloudSettings,
   healthStatus,
+  healthCheckedAt,
   onCheckCloudHealth,
+  onImportCsv,
   staleEntriesCount,
   snoozedEntriesCount,
   cloudDataStatus,
@@ -1317,7 +1490,9 @@ function Settings({
   settingsStatus: "idle" | "saving" | "saved" | "error";
   onSaveCloudSettings: (next: CloudSettings) => Promise<void>;
   healthStatus: HealthStatus;
+  healthCheckedAt: string;
   onCheckCloudHealth: () => Promise<void>;
+  onImportCsv: (rows: CsvImportRow[]) => Promise<void>;
   staleEntriesCount: number;
   snoozedEntriesCount: number;
   cloudDataStatus: "idle" | "loading" | "ready" | "error";
@@ -1330,6 +1505,8 @@ function Settings({
   const [activityActionFilter, setActivityActionFilter] = useState("all");
   const [activityQuery, setActivityQuery] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [csvImportText, setCsvImportText] = useState("");
+  const [csvImportStatus, setCsvImportStatus] = useState<"idle" | "parsing" | "importing" | "done" | "error">("idle");
 
   const exportStatuses = Array.from(new Set(entries.map((entry) => entry.status))).sort();
   const filteredEntriesForExport = entries.filter((entry) => {
@@ -1391,6 +1568,23 @@ function Settings({
       logCsvExport();
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function importCsvRows() {
+    setCsvImportStatus("parsing");
+    try {
+      const rows = parseCsvEntries(csvImportText);
+      if (!rows.length) {
+        setCsvImportStatus("error");
+        return;
+      }
+      setCsvImportStatus("importing");
+      await onImportCsv(rows);
+      setCsvImportStatus("done");
+      setCsvImportText("");
+    } catch {
+      setCsvImportStatus("error");
     }
   }
 
@@ -1522,6 +1716,7 @@ function Settings({
           {healthStatus.status === "loading" ? "Checking..." : "Run Health Check"}
         </button>
         <p className="helper">{healthMessage}</p>
+        {healthCheckedAt && <p className="helper">Last checked: {new Date(healthCheckedAt).toLocaleString()}</p>}
       </div>
       <div className="panel">
         <div className="section-heading">
@@ -1570,6 +1765,29 @@ function Settings({
         </button>
         <p className="helper">{filteredEntriesForExport.length} entries in export selection.</p>
         <textarea value={csv} readOnly />
+      </div>
+      <div className="panel wide">
+        <div className="section-heading">
+          <h2>CSV import</h2>
+          <p>Paste CSV with header row: type,title,company,platform,status,currency,value,location,work_type,last_updated,notes</p>
+        </div>
+        <textarea
+          value={csvImportText}
+          onChange={(event) => setCsvImportText(event.target.value)}
+          placeholder='type,title,company,platform,status,currency,value,location,work_type,last_updated,notes'
+        />
+        <div className="row-actions">
+          <button onClick={() => void importCsvRows()} disabled={!csvImportText.trim() || csvImportStatus === "importing"}>
+            {csvImportStatus === "importing" ? "Importing..." : "Import CSV"}
+          </button>
+          <p className="helper">
+            {csvImportStatus === "done"
+              ? "Import completed."
+              : csvImportStatus === "error"
+                ? "Import failed. Check CSV format."
+                : "Ready to import."}
+          </p>
+        </div>
       </div>
       <div className="panel wide">
         <div className="section-heading">
@@ -1637,6 +1855,20 @@ type CloudSettings = {
   aiEnabled: boolean;
 };
 
+type CsvImportRow = {
+  type: string;
+  title: string;
+  company: string;
+  platform: string;
+  status: string;
+  currency: string;
+  value: string;
+  location: string;
+  workType: string;
+  lastUpdated: string;
+  notes: string;
+};
+
 type OperationNotice = {
   type: "success" | "error";
   message: string;
@@ -1655,6 +1887,73 @@ function addDaysIso(baseDate: string, days: number) {
   const base = new Date(`${baseDate}T12:00:00+08:00`);
   base.setDate(base.getDate() + days);
   return base.toISOString().slice(0, 10);
+}
+
+function parseCsvEntries(csvText: string): CsvImportRow[] {
+  const rows = csvText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (rows.length < 2) return [];
+  const headers = parseCsvLine(rows[0]).map((header) => header.trim().toLowerCase());
+  const index = {
+    type: headers.indexOf("type"),
+    title: headers.indexOf("title"),
+    company: headers.indexOf("company"),
+    platform: headers.indexOf("platform"),
+    status: headers.indexOf("status"),
+    currency: headers.indexOf("currency"),
+    value: headers.indexOf("value"),
+    location: headers.indexOf("location"),
+    workType: headers.indexOf("work_type"),
+    lastUpdated: headers.indexOf("last_updated"),
+    notes: headers.indexOf("notes")
+  };
+  if (index.title < 0 || index.company < 0) return [];
+
+  return rows
+    .slice(1)
+    .map((line) => parseCsvLine(line))
+    .map((cells) => ({
+      type: cells[index.type] ?? "job",
+      title: cells[index.title] ?? "",
+      company: cells[index.company] ?? "",
+      platform: cells[index.platform] ?? "Direct",
+      status: cells[index.status] ?? "",
+      currency: cells[index.currency] ?? "IDR",
+      value: cells[index.value] ?? "TBD",
+      location: cells[index.location] ?? "Remote",
+      workType: cells[index.workType] ?? "Remote",
+      lastUpdated: cells[index.lastUpdated] ?? currentDate,
+      notes: cells[index.notes] ?? ""
+    }))
+    .filter((row) => row.title.trim() && row.company.trim());
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      cells.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  cells.push(current);
+  return cells;
 }
 
 function buildGateAStats(activityLog: ActivityLog[]): GateAStats {

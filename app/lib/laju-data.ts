@@ -46,6 +46,15 @@ export type LajuLocalState = {
   uiPreset?: "notion" | "trello" | "asana" | "github";
   compactMode?: boolean;
   darkMode?: boolean;
+  savedViews?: SavedView[];
+};
+
+export type SavedView = {
+  id: string;
+  name: string;
+  type: PipelineType;
+  filter: string;
+  view: "kanban" | "table";
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];

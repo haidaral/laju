@@ -675,3 +675,32 @@ Current gate: v1 post-launch speed and usability.
 ## Next
 1. v1.20: CSV import wizard (preview + mapping + conflict handling).
 2. v1.30: saved personal views (filters/layout) with one-click switching.
+
+## 2026-05-12 Twenty-third Slice (v1.20-v1.50 productivity expansion)
+
+Current gate: v1.20 through v1.50.
+
+## Completed
+- v1.20 CSV import wizard:
+  - Added CSV paste-and-import flow in Settings.
+  - Parser supports quoted CSV rows and required `title/company` validation.
+  - Imports into local mode or cloud mode through existing entry APIs.
+- v1.30 saved personal views:
+  - Save current pipeline layout + filter by name.
+  - Load saved views by pipeline type.
+  - Delete latest saved view quickly.
+  - Saved views persist in local state.
+- v1.40 intelligence cues:
+  - Added `AI cues` panel in Overview.
+  - Ranks active opportunities with lightweight score.
+  - Suggests next action per entry (`Follow up today`, `Review this week`, `Keep momentum`).
+- v1.50 ops readiness polish:
+  - Added cloud health timestamp (`Last checked`) in Settings.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+## Next
+1. v1.60+: import conflict resolution UI and richer field mapping.
+2. v1.70+: team assignment and comments thread per entry.
