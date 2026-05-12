@@ -228,6 +228,52 @@ export async function updateEntryStatus(
   };
 }
 
+export async function markEntryFollowedUp(
+  userId: string,
+  entryId: string
+): Promise<{ entry: RepositoryEntry; activity: RepositoryActivityLog }> {
+  const supabase = getSupabaseAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: existingEntry, error: existingError } = await supabase
+    .from("entries")
+    .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existingEntry) throw new Error("ENTRY_NOT_FOUND");
+
+  const { data: updatedEntry, error: updateError } = await supabase
+    .from("entries")
+    .update({ last_updated: now })
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
+    .single();
+  if (updateError) throw updateError;
+  const updated = updatedEntry as DbEntryRow;
+
+  const { data: insertedActivity, error: activityError } = await supabase
+    .from("activity_log")
+    .insert({
+      user_id: userId,
+      entry_id: entryId,
+      action: "followed_up",
+      old_status: updated.status,
+      new_status: updated.status,
+      note: `${updated.title} marked as followed up.`
+    })
+    .select("id,entry_id,action,old_status,new_status,note,created_at")
+    .single();
+  if (activityError) throw activityError;
+
+  return {
+    entry: mapDbEntry(updated),
+    activity: mapDbActivity(insertedActivity as DbActivityRow)
+  };
+}
+
 export async function buildServerEntriesCsv(userId: string): Promise<string> {
   const { entries } = await listEntriesWithActivity(userId);
   return [

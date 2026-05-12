@@ -367,3 +367,43 @@ Current gate: v0.25 API-level invite readiness.
 - Remaining non-code operational follow-up:
   - run UI-sign-in manual smoke with real Clerk session.
   - rotate exposed secrets after this setup session.
+
+## 2026-05-12 Twelfth Slice (v0.26-v0.30 rollout)
+
+Current gate: v0.26-v0.30 implementation pass before full QA rerun.
+
+## Completed
+- Upgraded frontend ID handling for local and cloud entries:
+  - `Entry.id` and `ActivityLog` IDs now support `number | string`.
+- Added auth-aware frontend controls:
+  - topbar sign-in button when signed out.
+  - Clerk user menu when signed in.
+  - explicit “Sign in required” panel when cloud sync is available.
+- Added cloud-first data behavior:
+  - load entries/activity from `/api/entries` when signed in and backend is ready.
+  - keep local demo fallback when cloud is unavailable or signed out.
+  - only persist browser-local state in local mode.
+- Wired cloud actions from UI:
+  - create entry -> `POST /api/entries`
+  - update details -> `PATCH /api/entries/:entryId`
+  - update status -> `POST /api/entries/status`
+  - delete entry -> `DELETE /api/entries/:entryId`
+  - follow-up -> new `POST /api/entries/follow-up`
+- Added new route:
+  - `app/api/entries/follow-up/route.ts`
+- Tightened middleware behavior:
+  - local API header bypass only in non-production mode.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Live API smoke:
+  - create entry: `201`
+  - follow-up endpoint: `200`
+  - delete entry: `200`
+
+## Next
+Run full end-to-end QA again for v0.26-v0.30:
+1. Signed-in browser flow checks on localhost.
+2. Two-user API isolation regression.
+3. Settings + reminder behavior consistency in cloud mode.

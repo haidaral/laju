@@ -4,7 +4,7 @@ export type WorkType = "Remote" | "Hybrid" | "Onsite";
 export type Currency = "IDR" | "USD";
 
 export type Entry = {
-  id: number;
+  id: number | string;
   type: PipelineType;
   title: string;
   company: string;
@@ -19,8 +19,8 @@ export type Entry = {
 };
 
 export type ActivityLog = {
-  id: number;
-  entryId: number;
+  id: number | string;
+  entryId: number | string;
   action: "created" | "status_change" | "followed_up" | "ghosted" | "note_added" | "deleted" | "csv_exported";
   oldStatus?: string;
   newStatus?: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { type DragEvent, type FormEvent, useEffect, useMemo, useState } from "react";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 import {
   buildEntriesCsv,
   currentDate,
@@ -20,6 +21,7 @@ import {
 const storageKey = "laju:v0.1:state";
 
 export default function Home() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const [activeView, setActiveView] = useState<ViewKey>("overview");
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>(initialActivityLog);
@@ -63,8 +65,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    if (dataMode !== "local") return;
     window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode }));
-  }, [activityLog, entries, isHydrated, mode]);
+  }, [activityLog, entries, isHydrated, mode, dataMode]);
 
   useEffect(() => {
     let active = true;
@@ -73,22 +76,39 @@ export default function Home() {
         const response = await fetch("/api/auth-readiness", { cache: "no-store" });
         if (!response.ok) return;
         const payload = (await response.json()) as { configured?: boolean };
-        if (active && payload.configured) {
+        if (!active) return;
+        if (payload.configured && authLoaded && isSignedIn) {
           setDataMode("cloud");
+        } else {
+          setDataMode("local");
         }
       } catch {
-        // Local demo mode remains active when readiness check is unavailable.
+        if (active) {
+          setDataMode("local");
+        }
       }
     }
     void detectDataMode();
     return () => {
       active = false;
     };
-  }, []);
+  }, [authLoaded, isSignedIn]);
 
   useEffect(() => {
     if (dataMode !== "cloud") return;
     let active = true;
+    async function loadCloudData() {
+      try {
+        const response = await fetch("/api/entries", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { entries: Entry[]; activityLog: ActivityLog[] };
+        if (!active) return;
+        setEntries(payload.entries ?? []);
+        setActivityLog(payload.activityLog ?? []);
+      } catch {
+        // Keep current state when cloud fetch fails.
+      }
+    }
     async function loadSettings() {
       try {
         const response = await fetch("/api/settings", { cache: "no-store" });
@@ -101,6 +121,7 @@ export default function Home() {
         // Keep defaults if cloud settings fetch fails.
       }
     }
+    void loadCloudData();
     void loadSettings();
     return () => {
       active = false;
@@ -130,7 +151,10 @@ export default function Home() {
 
   const activeEntries = entries.filter((entry) => !isTerminal(entry));
   const completedEntries = entries.filter((entry) => isTerminal(entry));
-  const staleEntries = entries.filter(isStale);
+  const staleEntries = entries.filter((entry) => {
+    const limit = entry.type === "job" ? cloudSettings.jobReminderDays : cloudSettings.freelanceReminderDays;
+    return !isTerminal(entry) && daysSince(entry.lastUpdated) >= limit;
+  });
   const wins = entries.filter((entry) => ["Accepted", "Paid"].includes(entry.status)).length;
   const winRate = completedEntries.length ? Math.round((wins / completedEntries.length) * 100) : 0;
 
@@ -149,9 +173,23 @@ export default function Home() {
     [activityLog, entries.length]
   );
 
-  function updateStatus(entryId: number, status: string) {
+  async function updateStatus(entryId: Entry["id"], status: string) {
     const entryBeforeUpdate = entries.find((entry) => entry.id === entryId);
     if (!entryBeforeUpdate || entryBeforeUpdate.status === status) return;
+
+    if (dataMode === "cloud") {
+      const response = await fetch("/api/entries/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId, status })
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
+      setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
+      setSelectedEntry((current) => (current && sameId(current.id, payload.entry.id) ? payload.entry : current));
+      setActivityLog((current) => [payload.activity, ...current]);
+      return;
+    }
 
     setEntries((current) =>
       current.map((entry) =>
@@ -179,11 +217,24 @@ export default function Home() {
     ]);
   }
 
-  function markFollowedUp(entryId: number) {
+  async function markFollowedUp(entryId: Entry["id"]) {
     const entryBeforeUpdate = entries.find((entry) => entry.id === entryId);
     if (!entryBeforeUpdate) return;
 
-    setEntries((current) => current.map((entry) => (entry.id === entryId ? { ...entry, lastUpdated: currentDate } : entry)));
+    if (dataMode === "cloud" && typeof entryId === "string") {
+      const response = await fetch("/api/entries/follow-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryId })
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
+      setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
+      setActivityLog((current) => [payload.activity, ...current]);
+      return;
+    }
+
+    setEntries((current) => current.map((entry) => (sameId(entry.id, entryId) ? { ...entry, lastUpdated: currentDate } : entry)));
     setActivityLog((current) => [
       {
         id: Date.now(),
@@ -198,9 +249,23 @@ export default function Home() {
     ]);
   }
 
-  function updateEntry(updatedEntry: Entry) {
+  async function updateEntry(updatedEntry: Entry) {
     const existingEntry = entries.find((entry) => entry.id === updatedEntry.id);
     if (!existingEntry) return;
+
+    if (dataMode === "cloud" && typeof updatedEntry.id === "string") {
+      const response = await fetch(`/api/entries/${updatedEntry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedEntry)
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
+      setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
+      setSelectedEntry(payload.entry);
+      setActivityLog((current) => [payload.activity, ...current]);
+      return;
+    }
 
     const entryWithTimestamp = {
       ...updatedEntry,
@@ -223,11 +288,26 @@ export default function Home() {
     ]);
   }
 
-  function deleteEntry(entryId: number) {
+  async function deleteEntry(entryId: Entry["id"]) {
     const entryToDelete = entries.find((entry) => entry.id === entryId);
     if (!entryToDelete) return;
 
-    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+    if (dataMode === "cloud" && typeof entryId === "string") {
+      const response = await fetch(`/api/entries/${entryId}`, {
+        method: "DELETE"
+      });
+      if (!response.ok) return;
+      setEntries((current) => current.filter((entry) => !sameId(entry.id, entryId)));
+      setSelectedEntry(null);
+      const refresh = await fetch("/api/entries", { cache: "no-store" });
+      if (refresh.ok) {
+        const payload = (await refresh.json()) as { activityLog: ActivityLog[] };
+        setActivityLog(payload.activityLog ?? []);
+      }
+      return;
+    }
+
+    setEntries((current) => current.filter((entry) => !sameId(entry.id, entryId)));
     setActivityLog((current) => [
       {
         id: Date.now(),
@@ -242,7 +322,7 @@ export default function Home() {
     setSelectedEntry(null);
   }
 
-  function addEntry(formData: FormData) {
+  async function addEntry(formData: FormData) {
     const type = formData.get("type") as PipelineType;
     const title = String(formData.get("title") || "").trim();
     const company = String(formData.get("company") || "").trim();
@@ -263,6 +343,20 @@ export default function Home() {
       lastUpdated: currentDate,
       notes: String(formData.get("notes") || "")
     };
+
+    if (dataMode === "cloud") {
+      const response = await fetch("/api/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry)
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
+      setEntries((current) => [payload.entry, ...current]);
+      setActivityLog((current) => [payload.activity, ...current]);
+      setIsCreating(false);
+      return;
+    }
 
     setEntries((current) => [entry, ...current]);
     setActivityLog((current) => [
@@ -343,10 +437,33 @@ export default function Home() {
             <p>{activeView === "overview" ? "Today" : "Pipeline"}</p>
             <h1>{viewTitle(activeView)}</h1>
           </div>
-          <button className="primary" onClick={() => setIsCreating(true)}>
-            Add Entry
-          </button>
+          <div className="row-actions">
+            {authLoaded && isSignedIn ? (
+              <UserButton />
+            ) : (
+              <SignInButton mode="modal">
+                <button>Sign In</button>
+              </SignInButton>
+            )}
+            <button className="primary" onClick={() => setIsCreating(true)}>
+              Add Entry
+            </button>
+          </div>
         </header>
+
+        {dataMode === "cloud" && authLoaded && !isSignedIn && (
+          <section className="panel">
+            <div className="section-heading">
+              <h2>Sign in required</h2>
+              <p>Cloud sync is enabled for this workspace.</p>
+            </div>
+            <div className="row-actions">
+              <SignInButton mode="modal">
+                <button>Sign In to Continue</button>
+              </SignInButton>
+            </div>
+          </section>
+        )}
 
         {activeView === "overview" && (
           <Overview
@@ -584,8 +701,8 @@ function Pipeline({
   setFilter: (value: string) => void;
   view: "kanban" | "table";
   setView: (value: "kanban" | "table") => void;
-  updateStatus: (id: number, status: string) => void;
-  markFollowedUp: (id: number) => void;
+  updateStatus: (id: Entry["id"], status: string) => void;
+  markFollowedUp: (id: Entry["id"]) => void;
   selectEntry: (entry: Entry) => void;
 }) {
   const stages = getStages(type);
@@ -593,8 +710,7 @@ function Pipeline({
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
 
   function handleDrop(event: DragEvent<HTMLDivElement>, status: string) {
-    const rawEntryId = event.dataTransfer.getData("text/plain");
-    const entryId = Number(rawEntryId);
+    const entryId = event.dataTransfer.getData("text/plain");
     if (!entryId) return;
     updateStatus(entryId, status);
   }
@@ -687,8 +803,8 @@ function EntryCard({
 }: {
   entry: Entry;
   selectEntry: (entry: Entry) => void;
-  updateStatus: (id: number, status: string) => void;
-  markFollowedUp: (id: number) => void;
+  updateStatus: (id: Entry["id"], status: string) => void;
+  markFollowedUp: (id: Entry["id"]) => void;
   stages: string[];
 }) {
   return (
@@ -739,8 +855,8 @@ function Reminders({
   updateStatus
 }: {
   entries: Entry[];
-  markFollowedUp: (id: number) => void;
-  updateStatus: (id: number, status: string) => void;
+  markFollowedUp: (id: Entry["id"]) => void;
+  updateStatus: (id: Entry["id"], status: string) => void;
 }) {
   return (
     <section className="panel full">
@@ -945,6 +1061,10 @@ type CloudSettings = {
   aiEnabled: boolean;
 };
 
+function sameId(a: Entry["id"], b: Entry["id"]) {
+  return String(a) === String(b);
+}
+
 function buildGateAStats(activityLog: ActivityLog[]): GateAStats {
   const now = new Date(`${currentDate}T12:00:00+08:00`);
   const weekMs = 7 * 24 * 60 * 60 * 1000;
@@ -1037,7 +1157,7 @@ function EntryDetail({
 }: {
   entry: Entry;
   updateEntry: (entry: Entry) => void;
-  deleteEntry: (id: number) => void;
+  deleteEntry: (id: Entry["id"]) => void;
   close: () => void;
 }) {
   const stages = getStages(entry.type);

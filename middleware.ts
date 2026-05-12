@@ -7,7 +7,7 @@ const hasClerkEnv = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(
 
 const protectedMiddleware = clerkMiddleware(async (auth, req) => {
   const hasLocalApiUserHeader = Boolean(req.headers.get("x-laju-user-id")?.trim());
-  if (hasLocalApiUserHeader && req.nextUrl.pathname.startsWith("/api/")) {
+  if (process.env.NODE_ENV !== "production" && hasLocalApiUserHeader && req.nextUrl.pathname.startsWith("/api/")) {
     return;
   }
   if (isProtectedRoute(req)) {
