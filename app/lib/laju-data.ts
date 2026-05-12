@@ -47,6 +47,7 @@ export type LajuLocalState = {
   compactMode?: boolean;
   darkMode?: boolean;
   savedViews?: SavedView[];
+  entryMetaMap?: Record<string, EntryMeta>;
 };
 
 export type SavedView = {
@@ -55,6 +56,12 @@ export type SavedView = {
   type: PipelineType;
   filter: string;
   view: "kanban" | "table";
+};
+
+export type EntryMeta = {
+  assignee: string;
+  priority: "Low" | "Medium" | "High";
+  comments: Array<{ id: string; text: string; createdAt: string }>;
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];

@@ -704,3 +704,31 @@ Current gate: v1.20 through v1.50.
 ## Next
 1. v1.60+: import conflict resolution UI and richer field mapping.
 2. v1.70+: team assignment and comments thread per entry.
+
+## 2026-05-12 Twenty-fourth Slice (v1.60-v1.70 collaboration + import safety)
+
+Current gate: v1.60-v1.70.
+
+## Completed
+- Added CSV import conflict mode:
+  - `Skip duplicates` (default)
+  - `Allow duplicates`
+  - duplicate detection by pipeline + title + company
+- Added entry collaboration metadata in Entry Detail:
+  - assignee
+  - priority (`Low/Medium/High`)
+  - comment thread with timestamped notes
+- Persisted collaboration metadata in local state payload.
+
+## Verified
+- `npm run lint`: passed.
+
+## Blocker / Known Issue
+- `npm run build` intermittently fails on this machine due to Next.js local runtime/manifest corruption and Windows memory/runtime instability:
+  - `VirtualAlloc failed`
+  - missing `.next/server/pages-manifest.json`
+- This appears environmental and not tied to the feature logic itself.
+
+## Next
+1. Stabilize local build runtime (clean restart cycle and process isolation) then re-run full build and QA.
+2. Continue v1.80-v2.00 with assignment filters, comment search, and production release artifacts.

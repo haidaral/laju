@@ -13,6 +13,7 @@ import {
   isTerminal,
   type ActivityLog,
   type Entry,
+  type EntryMeta,
   type LajuLocalState,
   type PipelineType,
   type SavedView,
@@ -56,6 +57,7 @@ export default function Home() {
   const [quickTitle, setQuickTitle] = useState("");
   const [quickCompany, setQuickCompany] = useState("");
   const [quickPlatform, setQuickPlatform] = useState("Direct");
+  const [entryMetaMap, setEntryMetaMap] = useState<Record<string, EntryMeta>>({});
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -71,6 +73,7 @@ export default function Home() {
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
           setSavedViews(parsed.savedViews ?? []);
+          setEntryMetaMap(parsed.entryMetaMap ?? {});
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
@@ -81,6 +84,7 @@ export default function Home() {
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
           setSavedViews(parsed.savedViews ?? []);
+          setEntryMetaMap(parsed.entryMetaMap ?? {});
           setMode("sample");
         }
       } catch {
@@ -92,6 +96,7 @@ export default function Home() {
         setCompactMode(false);
         setDarkMode(false);
         setSavedViews([]);
+        setEntryMetaMap({});
         setMode("sample");
       }
     }
@@ -103,9 +108,20 @@ export default function Home() {
     if (dataMode !== "local") return;
     window.localStorage.setItem(
       storageKey,
-      JSON.stringify({ entries, activityLog, mode, snoozedUntilMap, role: userRole, uiPreset, compactMode, darkMode, savedViews })
+      JSON.stringify({
+        entries,
+        activityLog,
+        mode,
+        snoozedUntilMap,
+        role: userRole,
+        uiPreset,
+        compactMode,
+        darkMode,
+        savedViews,
+        entryMetaMap
+      })
     );
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews]);
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews, entryMetaMap]);
 
   useEffect(() => {
     let active = true;
@@ -897,6 +913,15 @@ export default function Home() {
               }
               let imported = 0;
               for (const row of rows) {
+                const duplicate = entries.some(
+                  (entry) =>
+                    entry.type === (row.type === "freelance" ? "freelance" : "job") &&
+                    entry.title.trim().toLowerCase() === row.title.trim().toLowerCase() &&
+                    entry.company.trim().toLowerCase() === row.company.trim().toLowerCase()
+                );
+                if (row.importMode === "skip_duplicates" && duplicate) {
+                  continue;
+                }
                 const normalizedType: PipelineType = row.type === "freelance" ? "freelance" : "job";
                 const entry: Entry = {
                   id: Date.now() + imported,
@@ -951,6 +976,7 @@ export default function Home() {
               setEntries(initialEntries);
               setActivityLog(initialActivityLog);
               setSnoozedUntilMap({});
+              setEntryMetaMap({});
               setSelectedEntry(null);
               setMode("sample");
             }}
@@ -964,7 +990,19 @@ export default function Home() {
             {isCreating ? (
               <CreateEntry close={() => setIsCreating(false)} addEntry={addEntry} />
             ) : selectedEntry ? (
-              <EntryDetail entry={selectedEntry} updateEntry={updateEntry} deleteEntry={deleteEntry} close={() => setSelectedEntry(null)} />
+              <EntryDetail
+                entry={selectedEntry}
+                updateEntry={updateEntry}
+                deleteEntry={deleteEntry}
+                close={() => setSelectedEntry(null)}
+                meta={entryMetaMap[String(selectedEntry.id)]}
+                updateMeta={(meta) =>
+                  setEntryMetaMap((current) => ({
+                    ...current,
+                    [String(selectedEntry.id)]: meta
+                  }))
+                }
+              />
             ) : null}
           </aside>
         </div>
@@ -1507,6 +1545,7 @@ function Settings({
   const [isExporting, setIsExporting] = useState(false);
   const [csvImportText, setCsvImportText] = useState("");
   const [csvImportStatus, setCsvImportStatus] = useState<"idle" | "parsing" | "importing" | "done" | "error">("idle");
+  const [csvImportMode, setCsvImportMode] = useState<"skip_duplicates" | "allow_duplicates">("skip_duplicates");
 
   const exportStatuses = Array.from(new Set(entries.map((entry) => entry.status))).sort();
   const filteredEntriesForExport = entries.filter((entry) => {
@@ -1580,7 +1619,7 @@ function Settings({
         return;
       }
       setCsvImportStatus("importing");
-      await onImportCsv(rows);
+      await onImportCsv(rows.map((row) => ({ ...row, importMode: csvImportMode })));
       setCsvImportStatus("done");
       setCsvImportText("");
     } catch {
@@ -1777,6 +1816,10 @@ function Settings({
           placeholder='type,title,company,platform,status,currency,value,location,work_type,last_updated,notes'
         />
         <div className="row-actions">
+          <select value={csvImportMode} onChange={(event) => setCsvImportMode(event.target.value as "skip_duplicates" | "allow_duplicates")}>
+            <option value="skip_duplicates">Skip duplicates</option>
+            <option value="allow_duplicates">Allow duplicates</option>
+          </select>
           <button onClick={() => void importCsvRows()} disabled={!csvImportText.trim() || csvImportStatus === "importing"}>
             {csvImportStatus === "importing" ? "Importing..." : "Import CSV"}
           </button>
@@ -1867,6 +1910,7 @@ type CsvImportRow = {
   workType: string;
   lastUpdated: string;
   notes: string;
+  importMode?: "skip_duplicates" | "allow_duplicates";
 };
 
 type OperationNotice = {
@@ -2044,19 +2088,29 @@ function EntryDetail({
   entry,
   updateEntry,
   deleteEntry,
-  close
+  close,
+  meta,
+  updateMeta
 }: {
   entry: Entry;
   updateEntry: (entry: Entry) => void;
   deleteEntry: (id: Entry["id"]) => void;
   close: () => void;
+  meta?: EntryMeta;
+  updateMeta: (meta: EntryMeta) => void;
 }) {
   const stages = getStages(entry.type);
   const [draft, setDraft] = useState<Entry>(entry);
+  const [assignee, setAssignee] = useState(meta?.assignee ?? "");
+  const [priority, setPriority] = useState<EntryMeta["priority"]>(meta?.priority ?? "Medium");
+  const [commentText, setCommentText] = useState("");
+  const comments = meta?.comments ?? [];
 
   useEffect(() => {
     setDraft(entry);
-  }, [entry]);
+    setAssignee(meta?.assignee ?? "");
+    setPriority(meta?.priority ?? "Medium");
+  }, [entry, meta?.assignee, meta?.priority]);
 
   function saveEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2068,6 +2122,11 @@ function EntryDetail({
       platform: draft.platform.trim() || "Direct",
       location: draft.location.trim() || "Remote",
       value: draft.value.trim() || "TBD"
+    });
+    updateMeta({
+      assignee,
+      priority,
+      comments
     });
   }
 
@@ -2135,6 +2194,56 @@ function EntryDetail({
       <section className="notes-block">
         <h3>Notes</h3>
         <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} />
+      </section>
+      <section className="notes-block">
+        <h3>Collaboration</h3>
+        <label>
+          Assignee
+          <input value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="Name or team" />
+        </label>
+        <label>
+          Priority
+          <select value={priority} onChange={(event) => setPriority(event.target.value as EntryMeta["priority"])}>
+            <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
+          </select>
+        </label>
+        <label>
+          Add comment
+          <textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Context update..." />
+        </label>
+        <div className="row-actions">
+          <button
+            type="button"
+            onClick={() => {
+              const text = commentText.trim();
+              if (!text) return;
+              updateMeta({
+                assignee,
+                priority,
+                comments: [
+                  { id: `${Date.now()}`, text, createdAt: currentDate },
+                  ...comments
+                ]
+              });
+              setCommentText("");
+            }}
+          >
+            Add Comment
+          </button>
+        </div>
+        <div className="activity-list compact">
+          {comments.map((comment) => (
+            <div className="activity-row" key={comment.id}>
+              <div>
+                <strong>{comment.text}</strong>
+                <span>{comment.createdAt}</span>
+              </div>
+            </div>
+          ))}
+          {!comments.length && <p className="empty">No comments yet.</p>}
+        </div>
       </section>
       <section className="timeline">
         <h3>Activity</h3>
