@@ -25,6 +25,13 @@ export type RepositoryActivityLog = {
   createdAt: string;
 };
 
+export type RepositoryUserSettings = {
+  jobReminderDays: number;
+  freelanceReminderDays: number;
+  currency: "IDR" | "USD";
+  aiEnabled: boolean;
+};
+
 export type CreateEntryInput = {
   type: "job" | "freelance";
   title: string;
@@ -240,4 +247,143 @@ export async function buildServerEntriesCsv(userId: string): Promise<string> {
   ]
     .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
     .join("\n");
+}
+
+export async function updateEntryDetails(
+  userId: string,
+  entryId: string,
+  patch: Partial<CreateEntryInput> & { status?: string }
+): Promise<{ entry: RepositoryEntry; activity: RepositoryActivityLog }> {
+  const supabase = getSupabaseAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: existingEntry, error: existingError } = await supabase
+    .from("entries")
+    .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .single();
+  if (existingError) throw existingError;
+  const existing = existingEntry as DbEntryRow;
+
+  const updatePayload: Record<string, unknown> = {
+    last_updated: now
+  };
+  if (typeof patch.title === "string") updatePayload.title = patch.title;
+  if (typeof patch.company === "string") updatePayload.company = patch.company;
+  if (typeof patch.platform === "string") updatePayload.platform = patch.platform;
+  if (typeof patch.status === "string") updatePayload.status = patch.status;
+  if (typeof patch.location === "string") updatePayload.location = patch.location;
+  if (typeof patch.workType === "string") updatePayload.work_type = patch.workType;
+  if (typeof patch.currency === "string") updatePayload.currency = patch.currency;
+  if (typeof patch.value === "string") updatePayload.value = patch.value;
+  if (typeof patch.notes === "string") updatePayload.notes = patch.notes;
+
+  const { data: updatedEntry, error: updateError } = await supabase
+    .from("entries")
+    .update(updatePayload)
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
+    .single();
+  if (updateError) throw updateError;
+  const updated = updatedEntry as DbEntryRow;
+
+  const isStatusChanged = updated.status !== existing.status;
+  const { data: insertedActivity, error: activityError } = await supabase
+    .from("activity_log")
+    .insert({
+      user_id: userId,
+      entry_id: entryId,
+      action: isStatusChanged ? "status_change" : "note_added",
+      old_status: existing.status,
+      new_status: updated.status,
+      note: `${updated.title} details updated.`
+    })
+    .select("id,entry_id,action,old_status,new_status,note,created_at")
+    .single();
+  if (activityError) throw activityError;
+
+  return {
+    entry: mapDbEntry(updated),
+    activity: mapDbActivity(insertedActivity as DbActivityRow)
+  };
+}
+
+export async function deleteEntryById(userId: string, entryId: string): Promise<{ deleted: true }> {
+  const supabase = getSupabaseAdminClient();
+  const { data: existingEntry, error: existingError } = await supabase
+    .from("entries")
+    .select("id,title,type,status")
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .single();
+  if (existingError) throw existingError;
+
+  const row = existingEntry as { id: string; title: string; type: "job" | "freelance"; status: string };
+
+  const { error: activityError } = await supabase.from("activity_log").insert({
+    user_id: userId,
+    entry_id: row.id,
+    action: "deleted",
+    old_status: row.status,
+    new_status: null,
+    note: `${row.title} deleted from ${row.type === "job" ? "job" : "freelance"} pipeline.`
+  });
+  if (activityError) throw activityError;
+
+  const { error: deleteError } = await supabase.from("entries").delete().eq("id", entryId).eq("user_id", userId);
+  if (deleteError) throw deleteError;
+
+  return { deleted: true };
+}
+
+export async function getUserSettings(userId: string): Promise<RepositoryUserSettings> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("job_reminder_days,freelance_reminder_days,currency,ai_enabled")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return {
+      jobReminderDays: 14,
+      freelanceReminderDays: 7,
+      currency: "IDR",
+      aiEnabled: false
+    };
+  }
+  return {
+    jobReminderDays: data.job_reminder_days,
+    freelanceReminderDays: data.freelance_reminder_days,
+    currency: data.currency,
+    aiEnabled: data.ai_enabled
+  };
+}
+
+export async function upsertUserSettings(userId: string, input: RepositoryUserSettings): Promise<RepositoryUserSettings> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("user_settings")
+    .upsert(
+      {
+        user_id: userId,
+        job_reminder_days: input.jobReminderDays,
+        freelance_reminder_days: input.freelanceReminderDays,
+        currency: input.currency,
+        ai_enabled: input.aiEnabled,
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "user_id" }
+    )
+    .select("job_reminder_days,freelance_reminder_days,currency,ai_enabled")
+    .single();
+  if (error) throw error;
+  return {
+    jobReminderDays: data.job_reminder_days,
+    freelanceReminderDays: data.freelance_reminder_days,
+    currency: data.currency,
+    aiEnabled: data.ai_enabled
+  };
 }

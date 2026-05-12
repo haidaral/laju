@@ -29,6 +29,14 @@ export default function Home() {
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [filter, setFilter] = useState("All");
+  const [dataMode, setDataMode] = useState<DataMode>("local");
+  const [cloudSettings, setCloudSettings] = useState<CloudSettings>({
+    jobReminderDays: 14,
+    freelanceReminderDays: 7,
+    currency: "IDR",
+    aiEnabled: false
+  });
+  const [settingsStatus, setSettingsStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -57,6 +65,68 @@ export default function Home() {
     if (!isHydrated) return;
     window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode }));
   }, [activityLog, entries, isHydrated, mode]);
+
+  useEffect(() => {
+    let active = true;
+    async function detectDataMode() {
+      try {
+        const response = await fetch("/api/auth-readiness", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { configured?: boolean };
+        if (active && payload.configured) {
+          setDataMode("cloud");
+        }
+      } catch {
+        // Local demo mode remains active when readiness check is unavailable.
+      }
+    }
+    void detectDataMode();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (dataMode !== "cloud") return;
+    let active = true;
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as CloudSettings;
+        if (active) {
+          setCloudSettings(payload);
+        }
+      } catch {
+        // Keep defaults if cloud settings fetch fails.
+      }
+    }
+    void loadSettings();
+    return () => {
+      active = false;
+    };
+  }, [dataMode]);
+
+  async function saveCloudSettings(next: CloudSettings) {
+    if (dataMode !== "cloud") return;
+    setSettingsStatus("saving");
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next)
+      });
+      if (!response.ok) {
+        setSettingsStatus("error");
+        return;
+      }
+      const payload = (await response.json()) as CloudSettings;
+      setCloudSettings(payload);
+      setSettingsStatus("saved");
+    } catch {
+      setSettingsStatus("error");
+    }
+  }
 
   const activeEntries = entries.filter((entry) => !isTerminal(entry));
   const completedEntries = entries.filter((entry) => isTerminal(entry));
@@ -262,6 +332,7 @@ export default function Home() {
         <div className="sidebar-footer">
           <span>v0.1 invite build</span>
           <span>{mode === "empty" ? "Mode: Empty" : "Mode: Sample data"}</span>
+          <span>{dataMode === "cloud" ? "Sync: Cloud" : "Sync: Local demo"}</span>
           <strong>{entries.length} entries tracked</strong>
         </div>
       </aside>
@@ -314,6 +385,10 @@ export default function Home() {
             setSampleMode={useSampleData}
             mode={mode}
             logCsvExport={logCsvExport}
+            dataMode={dataMode}
+            cloudSettings={cloudSettings}
+            settingsStatus={settingsStatus}
+            onSaveCloudSettings={saveCloudSettings}
             resetLocalData={() => {
               setEntries(initialEntries);
               setActivityLog(initialActivityLog);
@@ -706,6 +781,10 @@ function Settings({
   setSampleMode,
   mode,
   logCsvExport,
+  dataMode,
+  cloudSettings,
+  settingsStatus,
+  onSaveCloudSettings,
   resetLocalData
 }: {
   entries: Entry[];
@@ -714,6 +793,10 @@ function Settings({
   setSampleMode: () => void;
   mode: "sample" | "empty";
   logCsvExport: () => void;
+  dataMode: DataMode;
+  cloudSettings: CloudSettings;
+  settingsStatus: "idle" | "saving" | "saved" | "error";
+  onSaveCloudSettings: (next: CloudSettings) => Promise<void>;
   resetLocalData: () => void;
 }) {
   const csv = buildEntriesCsv(entries);
@@ -749,12 +832,60 @@ function Settings({
         </div>
         <label>
           Jobs
-          <input type="number" defaultValue={14} min={1} max={60} />
+          <input
+            type="number"
+            value={cloudSettings.jobReminderDays}
+            min={1}
+            max={60}
+            onChange={(event) =>
+              void onSaveCloudSettings({
+                ...cloudSettings,
+                jobReminderDays: Number(event.target.value || 14)
+              })
+            }
+          />
         </label>
         <label>
           Freelance
-          <input type="number" defaultValue={7} min={1} max={60} />
+          <input
+            type="number"
+            value={cloudSettings.freelanceReminderDays}
+            min={1}
+            max={60}
+            onChange={(event) =>
+              void onSaveCloudSettings({
+                ...cloudSettings,
+                freelanceReminderDays: Number(event.target.value || 7)
+              })
+            }
+          />
         </label>
+        <label>
+          Default currency
+          <select
+            value={cloudSettings.currency}
+            onChange={(event) =>
+              void onSaveCloudSettings({
+                ...cloudSettings,
+                currency: event.target.value as "IDR" | "USD"
+              })
+            }
+          >
+            <option>IDR</option>
+            <option>USD</option>
+          </select>
+        </label>
+        <p className="helper">
+          {dataMode === "cloud"
+            ? settingsStatus === "saving"
+              ? "Saving settings..."
+              : settingsStatus === "saved"
+                ? "Settings saved."
+                : settingsStatus === "error"
+                  ? "Failed to save settings."
+                  : "Cloud settings active."
+            : "Local demo mode active. Settings are not persisted to cloud."}
+        </p>
       </div>
       <div className="panel">
         <div className="section-heading">
@@ -804,6 +935,14 @@ type GateAStats = {
   thisWeekActiveDays: number;
   averagePerWeek: number;
   aligned: boolean;
+};
+
+type DataMode = "local" | "cloud";
+type CloudSettings = {
+  jobReminderDays: number;
+  freelanceReminderDays: number;
+  currency: "IDR" | "USD";
+  aiEnabled: boolean;
 };
 
 function buildGateAStats(activityLog: ActivityLog[]): GateAStats {

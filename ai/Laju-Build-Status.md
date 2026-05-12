@@ -296,3 +296,40 @@ Activate live persistence and close v0.2:
 2. Verify Clerk user id aligns with Supabase RLS expectation (`auth.uid()` claim mapping).
 3. Run signed-in API smoke for create/list/status/export against real Supabase.
 4. Connect frontend data mode switch from local storage to API-backed mode.
+
+## 2026-05-12 Tenth Slice (toward v0.25)
+
+Current gate: v0.1 tracker build with backend wiring almost complete.
+
+## Completed
+- Added backend CRUD parity routes:
+  - `PATCH /api/entries/:entryId`
+  - `DELETE /api/entries/:entryId`
+- Added settings persistence route:
+  - `GET /api/settings`
+  - `PUT /api/settings`
+- Extended repository layer to support:
+  - entry detail update.
+  - entry delete with activity log event.
+  - user settings fetch/upsert.
+- Added frontend cloud/local sync indicator in sidebar.
+- Added frontend cloud settings persistence wiring in Settings panel.
+- Added v0.25 QA gate checklist:
+  - `ai/Laju-v0.25-QA-Gate.md`
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- New routes respond safely under missing env:
+  - `/api/settings` -> `not_configured`
+  - `/api/entries/:entryId` PATCH/DELETE -> `not_configured`
+
+## v0.25 Readiness Status
+- Implementation scope: largely complete.
+- Live invite gate: `BLOCKED` until real env keys + signed-in two-user QA are executed.
+
+## Remaining to fully close v0.25
+1. Set valid Clerk/Supabase env in `.env.local`.
+2. Verify Clerk user id mapping vs Supabase RLS claim.
+3. Execute two-user QA matrix in `ai/Laju-v0.25-QA-Gate.md`.
+4. Fix any discovered auth/RLS edge cases before invite rollout.
