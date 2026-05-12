@@ -407,3 +407,26 @@ Run full end-to-end QA again for v0.26-v0.30:
 1. Signed-in browser flow checks on localhost.
 2. Two-user API isolation regression.
 3. Settings + reminder behavior consistency in cloud mode.
+
+## 2026-05-12 Thirteenth Slice (v0.31-v0.40 readiness scaffolding)
+
+Current gate: v0.31-v0.40 implementation before full QA rerun.
+
+## Completed
+- Improved cloud-mode UX state handling:
+  - cloud mode now activates when backend is configured.
+  - sign-in-required panel shows clearly for signed-out users.
+  - cloud data loading/error panel added for signed-in users.
+- Added service health endpoint:
+  - `GET /api/health` reports auth readiness + DB reachability.
+- Added launch readiness checklist:
+  - `ai/Laju-v0.40-Launch-Checklist.md`
+- Added non-functional release hardening notes into build status cadence.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `GET /api/health`: available for operational checks.
+
+## Remaining
+Full QA rerun (browser + API) to validate v0.26-v0.40 end-to-end behavior under real sign-in flow.

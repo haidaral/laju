@@ -39,6 +39,7 @@ export default function Home() {
     aiEnabled: false
   });
   const [settingsStatus, setSettingsStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [cloudDataStatus, setCloudDataStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -77,7 +78,7 @@ export default function Home() {
         if (!response.ok) return;
         const payload = (await response.json()) as { configured?: boolean };
         if (!active) return;
-        if (payload.configured && authLoaded && isSignedIn) {
+        if (payload.configured && authLoaded) {
           setDataMode("cloud");
         } else {
           setDataMode("local");
@@ -92,21 +93,27 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [authLoaded, isSignedIn]);
+  }, [authLoaded]);
 
   useEffect(() => {
     if (dataMode !== "cloud") return;
+    if (!authLoaded || !isSignedIn) return;
     let active = true;
     async function loadCloudData() {
+      setCloudDataStatus("loading");
       try {
         const response = await fetch("/api/entries", { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (active) setCloudDataStatus("error");
+          return;
+        }
         const payload = (await response.json()) as { entries: Entry[]; activityLog: ActivityLog[] };
         if (!active) return;
         setEntries(payload.entries ?? []);
         setActivityLog(payload.activityLog ?? []);
+        setCloudDataStatus("ready");
       } catch {
-        // Keep current state when cloud fetch fails.
+        if (active) setCloudDataStatus("error");
       }
     }
     async function loadSettings() {
@@ -126,7 +133,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [dataMode]);
+  }, [authLoaded, dataMode, isSignedIn]);
 
   async function saveCloudSettings(next: CloudSettings) {
     if (dataMode !== "cloud") return;
@@ -461,6 +468,14 @@ export default function Home() {
               <SignInButton mode="modal">
                 <button>Sign In to Continue</button>
               </SignInButton>
+            </div>
+          </section>
+        )}
+        {dataMode === "cloud" && authLoaded && isSignedIn && cloudDataStatus !== "ready" && (
+          <section className="panel">
+            <div className="section-heading">
+              <h2>Cloud sync status</h2>
+              <p>{cloudDataStatus === "loading" ? "Loading cloud data..." : "Cloud data could not be loaded right now."}</p>
             </div>
           </section>
         )}
