@@ -55,3 +55,14 @@ export async function requireUserContext(request: Request, feature: string): Pro
   }
   return null;
 }
+
+export async function resolveUserIdOrError(
+  request: Request,
+  feature: string
+): Promise<{ userId: string | null; error: Response | null }> {
+  const userId = await getServerUserId(request);
+  if (!userId) {
+    return { userId: null, error: apiMissingAuth(feature) };
+  }
+  return { userId, error: null };
+}

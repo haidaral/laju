@@ -39,3 +39,25 @@ export function apiMissingAuth(feature: string): Response {
     { status: 401 }
   );
 }
+
+export function apiValidationError(error: string, details?: Record<string, unknown>): Response {
+  return Response.json(
+    {
+      error,
+      code: "validation_error",
+      details
+    } satisfies ApiErrorResponse,
+    { status: 400 }
+  );
+}
+
+export function apiServerError(error: string, details?: Record<string, unknown>): Response {
+  return Response.json(
+    {
+      error,
+      code: "server_error",
+      details
+    } satisfies ApiErrorResponse,
+    { status: 500 }
+  );
+}

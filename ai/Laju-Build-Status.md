@@ -260,3 +260,39 @@ Add Supabase repository wiring (still behind auth readiness):
 2. Implement `entries` and `activity_log` read/write functions.
 3. Replace API placeholder responses with real DB reads/writes under user scope.
 4. Keep current fallback behavior untouched until DB path passes QA.
+
+## 2026-05-12 Ninth Slice (v0.18-v0.19)
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Added Supabase server client helper in `app/lib/laju-supabase.ts`.
+- Added repository layer in `app/lib/laju-repository.ts` for:
+  - list entries + activity log by user.
+  - create entry + created activity log.
+  - update entry status + status activity log.
+  - build server-side CSV output from DB records.
+- Replaced API placeholders with real repository calls:
+  - `GET /api/entries`
+  - `POST /api/entries`
+  - `POST /api/entries/status`
+  - `GET /api/export`
+- Added request validation and structured API error responses:
+  - `validation_error`
+  - `server_error`
+- Kept auth/env boundary behavior intact:
+  - routes still return `not_configured` until required env keys are present.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `GET /api/auth-readiness`: returns expected missing env keys.
+- `GET /api/entries`: returns `not_configured` when env is incomplete.
+- `POST /api/entries/status`: returns `not_configured` when env is incomplete.
+
+## Next Smallest Ticket
+Activate live persistence and close v0.2:
+1. Populate Clerk/Supabase env keys in `.env.local`.
+2. Verify Clerk user id aligns with Supabase RLS expectation (`auth.uid()` claim mapping).
+3. Run signed-in API smoke for create/list/status/export against real Supabase.
+4. Connect frontend data mode switch from local storage to API-backed mode.
