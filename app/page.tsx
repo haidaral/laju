@@ -1001,7 +1001,32 @@ function Settings({
   onCheckCloudHealth: () => Promise<void>;
   resetLocalData: () => void;
 }) {
-  const csv = buildEntriesCsv(entries);
+  const [exportTypeFilter, setExportTypeFilter] = useState<"all" | "job" | "freelance">("all");
+  const [exportStatusFilter, setExportStatusFilter] = useState("all");
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [activityActionFilter, setActivityActionFilter] = useState("all");
+  const [activityQuery, setActivityQuery] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+
+  const exportStatuses = Array.from(new Set(entries.map((entry) => entry.status))).sort();
+  const filteredEntriesForExport = entries.filter((entry) => {
+    if (exportTypeFilter !== "all" && entry.type !== exportTypeFilter) return false;
+    if (exportStatusFilter !== "all" && entry.status !== exportStatusFilter) return false;
+    if (exportFrom && entry.lastUpdated < exportFrom) return false;
+    if (exportTo && entry.lastUpdated > exportTo) return false;
+    return true;
+  });
+  const csv = buildEntriesCsv(filteredEntriesForExport);
+  const activityActionOptions = Array.from(new Set(activityLog.map((activity) => activity.action))).sort();
+  const visibleActivity = activityLog
+    .filter((activity) => (activityActionFilter === "all" ? true : activity.action === activityActionFilter))
+    .filter((activity) => {
+      if (!activityQuery.trim()) return true;
+      const q = activityQuery.toLowerCase();
+      return activity.note.toLowerCase().includes(q) || activity.action.toLowerCase().includes(q);
+    })
+    .slice(0, 30);
   let healthMessage = "No health check yet.";
   if (healthStatus.status === "loading") {
     healthMessage = "Running health check...";
@@ -1011,15 +1036,40 @@ function Settings({
     healthMessage = healthStatus.message ?? "Health check reported an issue.";
   }
 
-  function downloadCsv() {
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `laju-entries-${currentDate}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    logCsvExport();
+  async function downloadCsv() {
+    setIsExporting(true);
+    try {
+      if (dataMode === "cloud") {
+        const search = new URLSearchParams();
+        if (exportTypeFilter !== "all") search.set("type", exportTypeFilter);
+        if (exportStatusFilter !== "all") search.set("status", exportStatusFilter);
+        if (exportFrom) search.set("from", exportFrom);
+        if (exportTo) search.set("to", exportTo);
+        const response = await fetch(`/api/export?${search.toString()}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const text = await response.text();
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `laju-entries-${currentDate}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        logCsvExport();
+        return;
+      }
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `laju-entries-${currentDate}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      logCsvExport();
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   return (
@@ -1118,18 +1168,71 @@ function Settings({
       <div className="panel wide">
         <div className="section-heading">
           <h2>CSV export</h2>
-          <p>Downloadable export plus local preview</p>
+          <p>Download filtered export plus preview</p>
         </div>
-        <button onClick={downloadCsv}>Download CSV</button>
+        <div className="filter-row">
+          <label>
+            Type
+            <select value={exportTypeFilter} onChange={(event) => setExportTypeFilter(event.target.value as "all" | "job" | "freelance")}>
+              <option value="all">All</option>
+              <option value="job">Job</option>
+              <option value="freelance">Freelance</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select value={exportStatusFilter} onChange={(event) => setExportStatusFilter(event.target.value)}>
+              <option value="all">All</option>
+              {exportStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            From
+            <input type="date" value={exportFrom} onChange={(event) => setExportFrom(event.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="date" value={exportTo} onChange={(event) => setExportTo(event.target.value)} />
+          </label>
+        </div>
+        <button onClick={() => void downloadCsv()} disabled={isExporting}>
+          {isExporting ? "Exporting..." : "Download CSV"}
+        </button>
+        <p className="helper">{filteredEntriesForExport.length} entries in export selection.</p>
         <textarea value={csv} readOnly />
       </div>
       <div className="panel wide">
         <div className="section-heading">
-          <h2>Local activity log</h2>
-          <p>Browser-persisted audit trail until Supabase is wired</p>
+          <h2>Activity log</h2>
+          <p>Search and filter recent audit trail</p>
+        </div>
+        <div className="filter-row">
+          <label>
+            Action
+            <select value={activityActionFilter} onChange={(event) => setActivityActionFilter(event.target.value)}>
+              <option value="all">All</option>
+              {activityActionOptions.map((action) => (
+                <option key={action} value={action}>
+                  {action.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Search
+            <input
+              placeholder="Search note or action"
+              value={activityQuery}
+              onChange={(event) => setActivityQuery(event.target.value)}
+            />
+          </label>
         </div>
         <div className="activity-list compact">
-          {activityLog.slice(0, 8).map((activity) => (
+          {visibleActivity.map((activity) => (
             <div className="activity-row" key={activity.id}>
               <div>
                 <strong>{activity.note}</strong>
@@ -1138,6 +1241,7 @@ function Settings({
               <em>{activity.createdAt}</em>
             </div>
           ))}
+          {!visibleActivity.length && <p className="empty">No activity matches this filter.</p>}
         </div>
       </div>
       <div className="panel danger-panel">

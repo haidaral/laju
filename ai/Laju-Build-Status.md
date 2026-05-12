@@ -489,3 +489,34 @@ Current gate: v0.46-v0.50 automated regression baseline.
 ## Next
 1. Begin v0.51-v0.60: reminder pipeline improvements + activity filtering/search + export range/filter options.
 2. Run signed-in manual browser QA and capture pass evidence for v0.50 hardening gate.
+
+## 2026-05-12 Sixteenth Slice (v0.51-v0.60 operator UX)
+
+Current gate: v0.51-v0.60 operator experience improvements.
+
+## Completed
+- Added filtered CSV export in Settings:
+  - type filter (`all/job/freelance`)
+  - status filter
+  - date range (`from/to`)
+  - export selection count preview
+- Added cloud export query support in API:
+  - `GET /api/export?type=&status=&from=&to=`
+- Updated repository export function to apply server-side filters before CSV generation.
+- Added activity log search/filter in Settings:
+  - action filter
+  - free-text search over note/action
+  - empty-result message
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed after clean dev restart cycle.
+- `GET /api/health`: `200`.
+
+## Notes
+- Initial QA run failed due to recurring local Next dev cache/runtime corruption (`webpack-runtime`/`.next` cache ENOENT). This is environmental and resolved with the established clean restart cycle.
+
+## Next
+1. v0.61-v0.70: agent-run monitoring panel + automation retry/failure surfacing.
+2. Execute signed-in browser QA for new export and activity filtering behavior.

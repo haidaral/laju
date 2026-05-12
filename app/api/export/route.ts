@@ -11,7 +11,18 @@ export async function GET(request: Request) {
   if (error) return error;
   if (!userId) return apiMissingAuth("Server-side export API");
   try {
-    const csv = await buildServerEntriesCsv(userId);
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type");
+    const status = searchParams.get("status");
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
+
+    const csv = await buildServerEntriesCsv(userId, {
+      type: type === "job" || type === "freelance" ? type : undefined,
+      status: status?.trim() ? status : undefined,
+      from: from?.trim() ? from : undefined,
+      to: to?.trim() ? to : undefined
+    });
     const today = new Date().toISOString().slice(0, 10);
     return new Response(csv, {
       status: 200,

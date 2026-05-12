@@ -514,6 +514,12 @@ button:disabled {
   margin-bottom: 14px;
 }
 
+.filter-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .panel textarea,
 .drawer-form textarea {
   min-height: 160px;
@@ -644,6 +650,10 @@ button:disabled {
 
   .form-row {
     display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .filter-row {
     grid-template-columns: 1fr;
   }
 }

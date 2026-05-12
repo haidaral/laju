@@ -274,8 +274,38 @@ export async function markEntryFollowedUp(
   };
 }
 
-export async function buildServerEntriesCsv(userId: string): Promise<string> {
-  const { entries } = await listEntriesWithActivity(userId);
+type ExportFilters = {
+  type?: "job" | "freelance";
+  status?: string;
+  from?: string;
+  to?: string;
+};
+
+export async function buildServerEntriesCsv(userId: string, filters?: ExportFilters): Promise<string> {
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from("entries")
+    .select("id,user_id,type,title,company,platform,status,currency,value,location,work_type,notes,last_updated")
+    .eq("user_id", userId)
+    .order("last_updated", { ascending: false });
+
+  if (filters?.type) {
+    query = query.eq("type", filters.type);
+  }
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters?.from) {
+    query = query.gte("last_updated", `${filters.from}T00:00:00.000Z`);
+  }
+  if (filters?.to) {
+    query = query.lte("last_updated", `${filters.to}T23:59:59.999Z`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const entries = (data as DbEntryRow[]).map(mapDbEntry);
+
   return [
     ["type", "title", "company", "platform", "status", "currency", "value", "location", "work_type", "last_updated", "notes"],
     ...entries.map((entry) => [
