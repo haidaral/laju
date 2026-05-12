@@ -23,6 +23,7 @@ export default function Home() {
   const [activeView, setActiveView] = useState<ViewKey>("overview");
   const [entries, setEntries] = useState<Entry[]>(initialEntries);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>(initialActivityLog);
+  const [mode, setMode] = useState<"sample" | "empty">("sample");
   const [isHydrated, setIsHydrated] = useState(false);
   const [pipelineView, setPipelineView] = useState<"kanban" | "table">("kanban");
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
@@ -34,11 +35,19 @@ export default function Home() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as LajuLocalState;
-        setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
-        setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
+        if (parsed.mode === "empty") {
+          setEntries(parsed.entries ?? []);
+          setActivityLog(parsed.activityLog ?? []);
+          setMode("empty");
+        } else {
+          setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
+          setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
+          setMode("sample");
+        }
       } catch {
         setEntries(initialEntries);
         setActivityLog(initialActivityLog);
+        setMode("sample");
       }
     }
     setIsHydrated(true);
@@ -46,8 +55,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog }));
-  }, [activityLog, entries, isHydrated]);
+    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode }));
+  }, [activityLog, entries, isHydrated, mode]);
 
   const activeEntries = entries.filter((entry) => !isTerminal(entry));
   const completedEntries = entries.filter((entry) => isTerminal(entry));
@@ -58,6 +67,16 @@ export default function Home() {
   const recentActivity = useMemo(
     () => [...activityLog].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
     [activityLog]
+  );
+  const gateAStats = useMemo(() => buildGateAStats(activityLog), [activityLog]);
+  const onboardingTasks = useMemo(
+    () => [
+      { label: "Add your first entry", done: entries.length > 0 },
+      { label: "Move one entry between statuses", done: activityLog.some((activity) => activity.action === "status_change") },
+      { label: "Mark one follow-up action", done: activityLog.some((activity) => activity.action === "followed_up") },
+      { label: "Export your CSV once", done: activityLog.some((activity) => activity.action === "csv_exported") }
+    ],
+    [activityLog, entries.length]
   );
 
   function updateStatus(entryId: number, status: string) {
@@ -190,6 +209,33 @@ export default function Home() {
     setIsCreating(false);
   }
 
+  function startEmptyMode() {
+    setEntries([]);
+    setActivityLog([]);
+    setSelectedEntry(null);
+    setMode("empty");
+  }
+
+  function useSampleData() {
+    setEntries(initialEntries);
+    setActivityLog(initialActivityLog);
+    setSelectedEntry(null);
+    setMode("sample");
+  }
+
+  function logCsvExport() {
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId: 0,
+        action: "csv_exported",
+        note: "CSV export downloaded.",
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -215,6 +261,7 @@ export default function Home() {
         </nav>
         <div className="sidebar-footer">
           <span>v0.1 invite build</span>
+          <span>{mode === "empty" ? "Mode: Empty" : "Mode: Sample data"}</span>
           <strong>{entries.length} entries tracked</strong>
         </div>
       </aside>
@@ -231,7 +278,16 @@ export default function Home() {
         </header>
 
         {activeView === "overview" && (
-          <Overview entries={entries} activeEntries={activeEntries} staleEntries={staleEntries} winRate={winRate} recentActivity={recentActivity} />
+          <Overview
+            entries={entries}
+            activeEntries={activeEntries}
+            staleEntries={staleEntries}
+            winRate={winRate}
+            recentActivity={recentActivity}
+            gateAStats={gateAStats}
+            onboardingTasks={onboardingTasks}
+            mode={mode}
+          />
         )}
 
         {(activeView === "jobs" || activeView === "freelance") && (
@@ -243,17 +299,29 @@ export default function Home() {
             view={pipelineView}
             setView={setPipelineView}
             updateStatus={updateStatus}
+            markFollowedUp={markFollowedUp}
             selectEntry={setSelectedEntry}
           />
         )}
 
         {activeView === "reminders" && <Reminders entries={staleEntries} markFollowedUp={markFollowedUp} updateStatus={updateStatus} />}
 
-        {activeView === "settings" && <Settings entries={entries} activityLog={activityLog} resetLocalData={() => {
-          setEntries(initialEntries);
-          setActivityLog(initialActivityLog);
-          setSelectedEntry(null);
-        }} />}
+        {activeView === "settings" && (
+          <Settings
+            entries={entries}
+            activityLog={activityLog}
+            setEmptyMode={startEmptyMode}
+            setSampleMode={useSampleData}
+            mode={mode}
+            logCsvExport={logCsvExport}
+            resetLocalData={() => {
+              setEntries(initialEntries);
+              setActivityLog(initialActivityLog);
+              setSelectedEntry(null);
+              setMode("sample");
+            }}
+          />
+        )}
       </section>
 
       {(selectedEntry || isCreating) && (
@@ -287,13 +355,19 @@ function Overview({
   activeEntries,
   staleEntries,
   winRate,
-  recentActivity
+  recentActivity,
+  gateAStats,
+  onboardingTasks,
+  mode
 }: {
   entries: Entry[];
   activeEntries: Entry[];
   staleEntries: Entry[];
   winRate: number;
   recentActivity: ActivityLog[];
+  gateAStats: GateAStats;
+  onboardingTasks: Array<{ label: string; done: boolean }>;
+  mode: "sample" | "empty";
 }) {
   const stats = [
     ["Total Entries", entries.length],
@@ -321,6 +395,45 @@ function Overview({
         <div className="split-row">
           <PipelineMeter label="Jobs" count={entries.filter((entry) => entry.type === "job").length} total={entries.length} />
           <PipelineMeter label="Freelance" count={entries.filter((entry) => entry.type === "freelance").length} total={entries.length} />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <h2>Gate A progress</h2>
+          <p>Target: 4 active days per week for 4 weeks</p>
+        </div>
+        <div className="gate-grid">
+          <article className="stat-card inline">
+            <span>This week</span>
+            <strong>
+              {gateAStats.thisWeekActiveDays}/4
+            </strong>
+          </article>
+          <article className="stat-card inline">
+            <span>Last 4 weeks average</span>
+            <strong>{gateAStats.averagePerWeek.toFixed(1)} days</strong>
+          </article>
+        </div>
+        <p className="helper">
+          {gateAStats.aligned
+            ? "Current behavior is aligned with Gate A."
+            : "Not yet aligned. Focus on consistent daily tracker use before adding new features."}
+        </p>
+      </section>
+
+      <section className="panel">
+        <div className="section-heading">
+          <h2>First-run checklist</h2>
+          <p>{mode === "empty" ? "Empty mode active for founder validation." : "Sample mode active for quick demo."}</p>
+        </div>
+        <div className="onboarding-list">
+          {onboardingTasks.map((task) => (
+            <div className="onboarding-row" key={task.label}>
+              <strong>{task.label}</strong>
+              <span>{task.done ? "Done" : "Pending"}</span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -387,6 +500,7 @@ function Pipeline({
   view,
   setView,
   updateStatus,
+  markFollowedUp,
   selectEntry
 }: {
   entries: Entry[];
@@ -396,6 +510,7 @@ function Pipeline({
   view: "kanban" | "table";
   setView: (value: "kanban" | "table") => void;
   updateStatus: (id: number, status: string) => void;
+  markFollowedUp: (id: number) => void;
   selectEntry: (entry: Entry) => void;
 }) {
   const stages = getStages(type);
@@ -443,7 +558,14 @@ function Pipeline({
               {pipelineEntries
                 .filter((entry) => entry.status === stage)
                 .map((entry) => (
-                  <EntryCard key={entry.id} entry={entry} selectEntry={selectEntry} updateStatus={updateStatus} stages={stages} />
+                  <EntryCard
+                    key={entry.id}
+                    entry={entry}
+                    selectEntry={selectEntry}
+                    updateStatus={updateStatus}
+                    markFollowedUp={markFollowedUp}
+                    stages={stages}
+                  />
                 ))}
             </div>
           ))}
@@ -485,11 +607,13 @@ function EntryCard({
   entry,
   selectEntry,
   updateStatus,
+  markFollowedUp,
   stages
 }: {
   entry: Entry;
   selectEntry: (entry: Entry) => void;
   updateStatus: (id: number, status: string) => void;
+  markFollowedUp: (id: number) => void;
   stages: string[];
 }) {
   return (
@@ -521,6 +645,15 @@ function EntryCard({
           <option key={stage}>{stage}</option>
         ))}
       </select>
+      <button
+        className="card-action"
+        onClick={(event) => {
+          event.stopPropagation();
+          markFollowedUp(entry.id);
+        }}
+      >
+        Followed Up
+      </button>
     </article>
   );
 }
@@ -569,10 +702,18 @@ function Reminders({
 function Settings({
   entries,
   activityLog,
+  setEmptyMode,
+  setSampleMode,
+  mode,
+  logCsvExport,
   resetLocalData
 }: {
   entries: Entry[];
   activityLog: ActivityLog[];
+  setEmptyMode: () => void;
+  setSampleMode: () => void;
+  mode: "sample" | "empty";
+  logCsvExport: () => void;
   resetLocalData: () => void;
 }) {
   const csv = buildEntriesCsv(entries);
@@ -585,10 +726,22 @@ function Settings({
     anchor.download = `laju-entries-${currentDate}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
+    logCsvExport();
   }
 
   return (
     <section className="settings-grid">
+      <div className="panel">
+        <div className="section-heading">
+          <h2>Onboarding mode</h2>
+          <p>Choose validation mode for first-run behavior</p>
+        </div>
+        <p className="helper">Current mode: {mode === "empty" ? "Empty" : "Sample data"}</p>
+        <div className="row-actions">
+          <button onClick={setSampleMode}>Use Sample Data</button>
+          <button onClick={setEmptyMode}>Start Empty</button>
+        </div>
+      </div>
       <div className="panel">
         <div className="section-heading">
           <h2>Reminder thresholds</h2>
@@ -645,6 +798,39 @@ function Settings({
       </div>
     </section>
   );
+}
+
+type GateAStats = {
+  thisWeekActiveDays: number;
+  averagePerWeek: number;
+  aligned: boolean;
+};
+
+function buildGateAStats(activityLog: ActivityLog[]): GateAStats {
+  const now = new Date(`${currentDate}T12:00:00+08:00`);
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const daysByWeek = [0, 0, 0, 0];
+
+  const uniqueActivityDays = new Set(
+    activityLog
+      .map((activity) => new Date(`${activity.createdAt}T12:00:00+08:00`))
+      .filter((day) => !Number.isNaN(day.getTime()))
+      .map((day) => day.toISOString().slice(0, 10))
+  );
+
+  Array.from(uniqueActivityDays).forEach((isoDay) => {
+    const day = new Date(`${isoDay}T12:00:00+08:00`);
+    const diffMs = now.getTime() - day.getTime();
+    if (diffMs < 0 || diffMs >= 4 * weekMs) return;
+    const weekIndex = Math.floor(diffMs / weekMs);
+    daysByWeek[weekIndex] += 1;
+  });
+
+  const thisWeekActiveDays = daysByWeek[0];
+  const averagePerWeek = daysByWeek.reduce((sum, value) => sum + value, 0) / daysByWeek.length;
+  const aligned = daysByWeek.every((days) => days >= 4);
+
+  return { thisWeekActiveDays, averagePerWeek, aligned };
 }
 
 function CreateEntry({ close, addEntry }: { close: () => void; addEntry: (formData: FormData) => void }) {

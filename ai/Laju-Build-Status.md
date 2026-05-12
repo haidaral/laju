@@ -157,3 +157,43 @@ Add first-run onboarding inside the app:
 1. Empty/demo mode controls.
 2. Clear sample-data label.
 3. First-entry checklist that supports Gate A founder-use validation.
+
+## 2026-05-12 Sixth Slice
+
+Current gate: v0.1 tracker build.
+
+## Completed
+- Added first-run onboarding mode controls in Settings:
+  - Empty mode for founder validation.
+  - Sample data mode for quick demos.
+- Persisted onboarding mode in localStorage with entries and activity log.
+- Added sidebar mode label so testers can see whether they are in sample or empty mode.
+- Added Gate A progress panel for weekly active-day tracking.
+- Added first-run checklist for:
+  - first entry created.
+  - status moved once.
+  - follow-up logged.
+  - CSV exported.
+- Logged CSV exports into the activity log.
+- Added card-level Followed Up action so new empty-mode users can complete onboarding without waiting for stale reminders.
+- Added invite/auth boundary checklist in `ai/Laju-Invite-Auth-Boundary-Checklist.md`.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm audit --omit=dev`: 0 vulnerabilities.
+- Restarted dev server after production build to avoid stale `.next` dev chunks.
+- Playwright onboarding smoke:
+  - Empty mode starts with 0 entries.
+  - First entry can be created.
+  - Empty mode and the new entry persist after reload.
+  - Status movement logs checklist progress.
+  - Followed Up action logs checklist progress.
+  - CSV download logs checklist progress.
+
+## Next Smallest Ticket
+Wire invite-ready auth boundary when credentials are available:
+1. Verify Clerk and Supabase environment variables exist without printing values.
+2. Add Clerk middleware and protected tracker routes.
+3. Replace API stubs with Supabase user-scoped CRUD/export behavior.
+4. Validate RLS with two test users before inviting testers.

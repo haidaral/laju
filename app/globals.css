@@ -185,6 +185,10 @@ h3 {
   padding: 18px;
 }
 
+.stat-card.inline {
+  padding: 14px;
+}
+
 .stat-card span,
 .card-topline span,
 .card-topline em,
@@ -249,6 +253,32 @@ td span {
 .reminder-list {
   display: grid;
   gap: 10px;
+}
+
+.gate-grid,
+.onboarding-list {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+}
+
+.onboarding-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.helper {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 12px;
+  margin-bottom: 0;
 }
 
 .activity-row,
@@ -396,6 +426,14 @@ label textarea,
   color: var(--muted);
   margin-bottom: 0;
   font-size: 13px;
+}
+
+.card-action {
+  border: 1px solid var(--line);
+  background: #f7f2e8;
+  border-radius: 7px;
+  color: var(--ink);
+  padding: 8px 10px;
 }
 
 .table-wrap {

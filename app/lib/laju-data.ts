@@ -21,7 +21,7 @@ export type Entry = {
 export type ActivityLog = {
   id: number;
   entryId: number;
-  action: "created" | "status_change" | "followed_up" | "ghosted" | "note_added" | "deleted";
+  action: "created" | "status_change" | "followed_up" | "ghosted" | "note_added" | "deleted" | "csv_exported";
   oldStatus?: string;
   newStatus?: string;
   note: string;
@@ -31,6 +31,7 @@ export type ActivityLog = {
 export type LajuLocalState = {
   entries: Entry[];
   activityLog: ActivityLog[];
+  mode?: "sample" | "empty";
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];
