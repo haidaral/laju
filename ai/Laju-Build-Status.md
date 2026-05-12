@@ -430,3 +430,62 @@ Current gate: v0.31-v0.40 implementation before full QA rerun.
 
 ## Remaining
 Full QA rerun (browser + API) to validate v0.26-v0.40 end-to-end behavior under real sign-in flow.
+
+## 2026-05-12 Fourteenth Slice (v0.41-v0.45 QA hardening start)
+
+Current gate: v0.41-v0.45 reliability pass.
+
+## Completed
+- Added in-app operation notices for cloud actions:
+  - create entry
+  - update entry
+  - update status
+  - follow-up
+  - save settings
+  - delete entry
+- Added explicit error notices on non-OK cloud API responses for core write actions.
+- Added stricter client-side create-entry validation (minimum title/company length).
+- Added on-demand cloud health check control in Settings using `GET /api/health`.
+- Added health status messaging states:
+  - idle
+  - loading
+  - ok
+  - error
+- Added shared notice styling + disabled-button UX states in global styles.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Build route manifest includes `/api/health` and all entry/settings routes without type errors.
+
+## Next
+1. v0.46-v0.50: signed-in browser QA pass and regression checklist execution.
+2. Add reproducible QA script for API regression matrix.
+3. Close MVP-hardening recommendation gate at v0.50.
+
+## 2026-05-12 Fifteenth Slice (v0.46-v0.50 regression automation)
+
+Current gate: v0.46-v0.50 automated regression baseline.
+
+## Completed
+- Added API regression runner:
+  - `scripts/qa-api.mjs`
+  - covers health, create, status update, follow-up, cross-user protection, settings, export, and delete.
+- Added npm script:
+  - `npm run qa:api`
+- Confirmed known local Next.js dev chunk instability remains an environmental risk, not a route-logic defect.
+- Revalidated QA after clean restart cycle (`Stop dev -> delete .next -> restart dev`).
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed (against `http://localhost:3000`).
+- `GET /api/health`: `200`.
+
+## Notes
+- Initial `qa:api` run failed due to local Next dev corruption (`Cannot find module ... webpack-runtime.js`).
+- After clean restart cycle, `qa:api` passed end-to-end.
+
+## Next
+1. Begin v0.51-v0.60: reminder pipeline improvements + activity filtering/search + export range/filter options.
+2. Run signed-in manual browser QA and capture pass evidence for v0.50 hardening gate.

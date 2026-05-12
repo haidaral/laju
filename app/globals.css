@@ -211,6 +211,26 @@ td span {
   padding: 20px;
 }
 
+.notice {
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.notice-success {
+  background: #eff9f4;
+  border-color: #b8dac8;
+  color: #1d5a41;
+}
+
+.notice-error {
+  background: #fff4ef;
+  border-color: #e3b7a6;
+  color: #8f3f1d;
+}
+
 .wide,
 .full {
   grid-column: 1 / -1;
@@ -478,6 +498,11 @@ tr:hover td {
   background: var(--surface);
   border-radius: 7px;
   padding: 9px 12px;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .settings-grid label,

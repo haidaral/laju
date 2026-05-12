@@ -40,6 +40,8 @@ export default function Home() {
   });
   const [settingsStatus, setSettingsStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [cloudDataStatus, setCloudDataStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [operationNotice, setOperationNotice] = useState<OperationNotice>(null);
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: "idle" });
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -135,6 +137,12 @@ export default function Home() {
     };
   }, [authLoaded, dataMode, isSignedIn]);
 
+  useEffect(() => {
+    if (!operationNotice) return;
+    const timeout = window.setTimeout(() => setOperationNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [operationNotice]);
+
   async function saveCloudSettings(next: CloudSettings) {
     if (dataMode !== "cloud") return;
     setSettingsStatus("saving");
@@ -146,13 +154,42 @@ export default function Home() {
       });
       if (!response.ok) {
         setSettingsStatus("error");
+        setOperationNotice({ type: "error", message: "Failed to save settings." });
         return;
       }
       const payload = (await response.json()) as CloudSettings;
       setCloudSettings(payload);
       setSettingsStatus("saved");
+      setOperationNotice({ type: "success", message: "Settings saved." });
     } catch {
       setSettingsStatus("error");
+      setOperationNotice({ type: "error", message: "Failed to save settings." });
+    }
+  }
+
+  async function checkCloudHealth() {
+    setHealthStatus({ status: "loading" });
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      if (!response.ok) {
+        setHealthStatus({ status: "error", message: "Health endpoint is unavailable." });
+        return;
+      }
+      const payload = (await response.json()) as {
+        auth: { configured: boolean };
+        db: { ok: boolean; error?: string };
+      };
+      if (!payload.auth.configured) {
+        setHealthStatus({ status: "error", message: "Auth environment is not configured." });
+        return;
+      }
+      if (!payload.db.ok) {
+        setHealthStatus({ status: "error", message: payload.db.error ?? "Database is not reachable." });
+        return;
+      }
+      setHealthStatus({ status: "ok", message: "Auth and database are healthy." });
+    } catch {
+      setHealthStatus({ status: "error", message: "Health check failed." });
     }
   }
 
@@ -190,11 +227,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryId, status })
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setOperationNotice({ type: "error", message: "Failed to update status." });
+        return;
+      }
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setSelectedEntry((current) => (current && sameId(current.id, payload.entry.id) ? payload.entry : current));
       setActivityLog((current) => [payload.activity, ...current]);
+      setOperationNotice({ type: "success", message: "Status updated." });
       return;
     }
 
@@ -234,10 +275,14 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entryId })
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setOperationNotice({ type: "error", message: "Failed to log follow-up." });
+        return;
+      }
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setActivityLog((current) => [payload.activity, ...current]);
+      setOperationNotice({ type: "success", message: "Follow-up logged." });
       return;
     }
 
@@ -266,11 +311,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedEntry)
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setOperationNotice({ type: "error", message: "Failed to update entry." });
+        return;
+      }
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setSelectedEntry(payload.entry);
       setActivityLog((current) => [payload.activity, ...current]);
+      setOperationNotice({ type: "success", message: "Entry updated." });
       return;
     }
 
@@ -303,7 +352,10 @@ export default function Home() {
       const response = await fetch(`/api/entries/${entryId}`, {
         method: "DELETE"
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setOperationNotice({ type: "error", message: "Failed to delete entry." });
+        return;
+      }
       setEntries((current) => current.filter((entry) => !sameId(entry.id, entryId)));
       setSelectedEntry(null);
       const refresh = await fetch("/api/entries", { cache: "no-store" });
@@ -334,7 +386,10 @@ export default function Home() {
     const title = String(formData.get("title") || "").trim();
     const company = String(formData.get("company") || "").trim();
 
-    if (!title || !company) return;
+    if (!title || !company || title.length < 2 || company.length < 2) {
+      setOperationNotice({ type: "error", message: "Title and Company must be at least 2 characters." });
+      return;
+    }
 
     const entry: Entry = {
       id: Date.now(),
@@ -357,11 +412,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(entry)
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        setOperationNotice({ type: "error", message: "Failed to create entry." });
+        return;
+      }
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => [payload.entry, ...current]);
       setActivityLog((current) => [payload.activity, ...current]);
       setIsCreating(false);
+      setOperationNotice({ type: "success", message: "Entry created." });
       return;
     }
 
@@ -378,6 +437,7 @@ export default function Home() {
       ...current
     ]);
     setIsCreating(false);
+    setOperationNotice({ type: "success", message: "Entry created." });
   }
 
   function startEmptyMode() {
@@ -479,6 +539,11 @@ export default function Home() {
             </div>
           </section>
         )}
+        {operationNotice && (
+          <section className={`notice ${operationNotice.type === "error" ? "notice-error" : "notice-success"}`}>
+            {operationNotice.message}
+          </section>
+        )}
 
         {activeView === "overview" && (
           <Overview
@@ -521,6 +586,8 @@ export default function Home() {
             cloudSettings={cloudSettings}
             settingsStatus={settingsStatus}
             onSaveCloudSettings={saveCloudSettings}
+            healthStatus={healthStatus}
+            onCheckCloudHealth={checkCloudHealth}
             resetLocalData={() => {
               setEntries(initialEntries);
               setActivityLog(initialActivityLog);
@@ -916,6 +983,8 @@ function Settings({
   cloudSettings,
   settingsStatus,
   onSaveCloudSettings,
+  healthStatus,
+  onCheckCloudHealth,
   resetLocalData
 }: {
   entries: Entry[];
@@ -928,9 +997,19 @@ function Settings({
   cloudSettings: CloudSettings;
   settingsStatus: "idle" | "saving" | "saved" | "error";
   onSaveCloudSettings: (next: CloudSettings) => Promise<void>;
+  healthStatus: HealthStatus;
+  onCheckCloudHealth: () => Promise<void>;
   resetLocalData: () => void;
 }) {
   const csv = buildEntriesCsv(entries);
+  let healthMessage = "No health check yet.";
+  if (healthStatus.status === "loading") {
+    healthMessage = "Running health check...";
+  } else if (healthStatus.status === "ok") {
+    healthMessage = healthStatus.message;
+  } else if (healthStatus.status === "error") {
+    healthMessage = healthStatus.message ?? "Health check reported an issue.";
+  }
 
   function downloadCsv() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -1020,6 +1099,16 @@ function Settings({
       </div>
       <div className="panel">
         <div className="section-heading">
+          <h2>Cloud health</h2>
+          <p>Quick runtime checks for auth and database</p>
+        </div>
+        <button onClick={() => void onCheckCloudHealth()} disabled={healthStatus.status === "loading"}>
+          {healthStatus.status === "loading" ? "Checking..." : "Run Health Check"}
+        </button>
+        <p className="helper">{healthMessage}</p>
+      </div>
+      <div className="panel">
+        <div className="section-heading">
           <h2>Invite whitelist</h2>
           <p>Manual invite control for v0.1</p>
         </div>
@@ -1075,6 +1164,16 @@ type CloudSettings = {
   currency: "IDR" | "USD";
   aiEnabled: boolean;
 };
+
+type OperationNotice = {
+  type: "success" | "error";
+  message: string;
+} | null;
+
+type HealthStatus =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; message: string }
+  | { status: "error"; message?: string };
 
 function sameId(a: Entry["id"], b: Entry["id"]) {
   return String(a) === String(b);
