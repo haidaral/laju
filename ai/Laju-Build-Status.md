@@ -603,3 +603,24 @@ Current gate: v0.81-v0.90 access and control hardening.
 
 ## Next
 1. v0.91-v1.00: finalize runbooks/checklists + complete manual signed-in browser QA + release-candidate sign-off.
+
+## 2026-05-12 Twentieth Slice (v0.91-v1.00 release gate prep)
+
+Current gate: v0.91-v1.00 release candidate.
+
+## Completed
+- Added v1 release-candidate checklist:
+  - `ai/Laju-v1.00-Release-Candidate.md`
+- Captured final QA coverage expectations for:
+  - functional flows
+  - access control
+  - API regression
+  - operational readiness
+  - release sign-off
+
+## Verified
+- Checklist file added and aligned to current implemented feature set through v0.90.
+
+## Remaining to declare `v1.0`
+1. Execute full signed-in browser manual QA against checklist and capture evidence.
+2. Confirm final release sign-offs and tag `v1.0.0`.
