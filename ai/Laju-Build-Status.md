@@ -520,3 +520,33 @@ Current gate: v0.51-v0.60 operator experience improvements.
 ## Next
 1. v0.61-v0.70: agent-run monitoring panel + automation retry/failure surfacing.
 2. Execute signed-in browser QA for new export and activity filtering behavior.
+
+## 2026-05-12 Seventeenth Slice (v0.61-v0.70 reminder scheduling + ops snapshot)
+
+Current gate: v0.61-v0.70 operations and reminder maturity.
+
+## Completed
+- Added reminder snooze system in app state:
+  - supports snooze windows (3d, 7d) from reminder queue.
+  - excludes snoozed items from active stale queue until snooze date passes.
+  - local state persistence for `snoozedUntilMap` in browser mode.
+  - activity log events for `snoozed` and `unsnoozed`.
+- Added ops snapshot panel in Settings:
+  - cloud data status.
+  - needs-attention count.
+  - snoozed reminder count.
+- Added responsive ops panel styling.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed after clean local restart cycle.
+- `GET /api/health`: `200`.
+
+## Notes
+- Recurring local Next.js dev cache/runtime chunk corruption remains present and can produce transient `500` for API routes during QA runs; clean restart cycle continues to resolve.
+
+## Next
+1. v0.71-v0.80: multi-workspace data model + saved views + bulk actions.
+2. v0.81-v0.90: permission hardening and audit-log enforcement.
+3. v0.91-v1.00: launch QA, runbooks, and release-candidate gate.

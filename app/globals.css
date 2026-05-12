@@ -520,6 +520,12 @@ button:disabled {
   gap: 10px;
 }
 
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .panel textarea,
 .drawer-form textarea {
   min-height: 160px;
@@ -654,6 +660,10 @@ button:disabled {
   }
 
   .filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-grid {
     grid-template-columns: 1fr;
   }
 }

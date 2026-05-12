@@ -42,6 +42,7 @@ export default function Home() {
   const [cloudDataStatus, setCloudDataStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [operationNotice, setOperationNotice] = useState<OperationNotice>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus>({ status: "idle" });
+  const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -51,15 +52,18 @@ export default function Home() {
         if (parsed.mode === "empty") {
           setEntries(parsed.entries ?? []);
           setActivityLog(parsed.activityLog ?? []);
+          setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
           setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
+          setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setMode("sample");
         }
       } catch {
         setEntries(initialEntries);
         setActivityLog(initialActivityLog);
+        setSnoozedUntilMap({});
         setMode("sample");
       }
     }
@@ -69,8 +73,8 @@ export default function Home() {
   useEffect(() => {
     if (!isHydrated) return;
     if (dataMode !== "local") return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode }));
-  }, [activityLog, entries, isHydrated, mode, dataMode]);
+    window.localStorage.setItem(storageKey, JSON.stringify({ entries, activityLog, mode, snoozedUntilMap }));
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap]);
 
   useEffect(() => {
     let active = true;
@@ -197,8 +201,15 @@ export default function Home() {
   const completedEntries = entries.filter((entry) => isTerminal(entry));
   const staleEntries = entries.filter((entry) => {
     const limit = entry.type === "job" ? cloudSettings.jobReminderDays : cloudSettings.freelanceReminderDays;
-    return !isTerminal(entry) && daysSince(entry.lastUpdated) >= limit;
+    const snoozedUntil = snoozedUntilMap[String(entry.id)];
+    const isSnoozed = snoozedUntil ? snoozedUntil >= currentDate : false;
+    return !isTerminal(entry) && !isSnoozed && daysSince(entry.lastUpdated) >= limit;
   });
+  const snoozedEntriesCount = Object.keys(snoozedUntilMap).filter((entryId) => {
+    const entry = entries.find((item) => sameId(item.id, entryId));
+    if (!entry || isTerminal(entry)) return false;
+    return snoozedUntilMap[entryId] >= currentDate;
+  }).length;
   const wins = entries.filter((entry) => ["Accepted", "Paid"].includes(entry.status)).length;
   const winRate = completedEntries.length ? Math.round((wins / completedEntries.length) * 100) : 0;
 
@@ -287,6 +298,11 @@ export default function Home() {
     }
 
     setEntries((current) => current.map((entry) => (sameId(entry.id, entryId) ? { ...entry, lastUpdated: currentDate } : entry)));
+    setSnoozedUntilMap((current) => {
+      const next = { ...current };
+      delete next[String(entryId)];
+      return next;
+    });
     setActivityLog((current) => [
       {
         id: Date.now(),
@@ -299,6 +315,49 @@ export default function Home() {
       },
       ...current
     ]);
+  }
+
+  function snoozeReminder(entryId: Entry["id"], days: number) {
+    const entry = entries.find((item) => sameId(item.id, entryId));
+    if (!entry) return;
+    const snoozeUntil = addDaysIso(currentDate, days);
+    setSnoozedUntilMap((current) => ({ ...current, [String(entryId)]: snoozeUntil }));
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId,
+        action: "snoozed",
+        oldStatus: entry.status,
+        newStatus: entry.status,
+        note: `${entry.title} snoozed until ${snoozeUntil}.`,
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+    setOperationNotice({ type: "success", message: `Reminder snoozed for ${days} days.` });
+  }
+
+  function clearSnooze(entryId: Entry["id"]) {
+    const entry = entries.find((item) => sameId(item.id, entryId));
+    if (!entry) return;
+    setSnoozedUntilMap((current) => {
+      const next = { ...current };
+      delete next[String(entryId)];
+      return next;
+    });
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId,
+        action: "unsnoozed",
+        oldStatus: entry.status,
+        newStatus: entry.status,
+        note: `${entry.title} snooze cleared.`,
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+    setOperationNotice({ type: "success", message: "Reminder snooze cleared." });
   }
 
   async function updateEntry(updatedEntry: Entry) {
@@ -443,6 +502,7 @@ export default function Home() {
   function startEmptyMode() {
     setEntries([]);
     setActivityLog([]);
+    setSnoozedUntilMap({});
     setSelectedEntry(null);
     setMode("empty");
   }
@@ -450,6 +510,7 @@ export default function Home() {
   function useSampleData() {
     setEntries(initialEntries);
     setActivityLog(initialActivityLog);
+    setSnoozedUntilMap({});
     setSelectedEntry(null);
     setMode("sample");
   }
@@ -572,7 +633,16 @@ export default function Home() {
           />
         )}
 
-        {activeView === "reminders" && <Reminders entries={staleEntries} markFollowedUp={markFollowedUp} updateStatus={updateStatus} />}
+        {activeView === "reminders" && (
+          <Reminders
+            entries={staleEntries}
+            markFollowedUp={markFollowedUp}
+            updateStatus={updateStatus}
+            snoozeReminder={snoozeReminder}
+            clearSnooze={clearSnooze}
+            snoozedUntilMap={snoozedUntilMap}
+          />
+        )}
 
         {activeView === "settings" && (
           <Settings
@@ -588,9 +658,13 @@ export default function Home() {
             onSaveCloudSettings={saveCloudSettings}
             healthStatus={healthStatus}
             onCheckCloudHealth={checkCloudHealth}
+            staleEntriesCount={staleEntries.length}
+            snoozedEntriesCount={snoozedEntriesCount}
+            cloudDataStatus={cloudDataStatus}
             resetLocalData={() => {
               setEntries(initialEntries);
               setActivityLog(initialActivityLog);
+              setSnoozedUntilMap({});
               setSelectedEntry(null);
               setMode("sample");
             }}
@@ -934,11 +1008,17 @@ function EntryCard({
 function Reminders({
   entries,
   markFollowedUp,
-  updateStatus
+  updateStatus,
+  snoozeReminder,
+  clearSnooze,
+  snoozedUntilMap
 }: {
   entries: Entry[];
   markFollowedUp: (id: Entry["id"]) => void;
   updateStatus: (id: Entry["id"], status: string) => void;
+  snoozeReminder: (id: Entry["id"], days: number) => void;
+  clearSnooze: (id: Entry["id"]) => void;
+  snoozedUntilMap: Record<string, string>;
 }) {
   return (
     <section className="panel full">
@@ -958,6 +1038,9 @@ function Reminders({
               </div>
               <div className="row-actions">
                 <button onClick={() => markFollowedUp(entry.id)}>Followed Up</button>
+                <button onClick={() => snoozeReminder(entry.id, 3)}>Snooze 3d</button>
+                <button onClick={() => snoozeReminder(entry.id, 7)}>Snooze 7d</button>
+                {snoozedUntilMap[String(entry.id)] && <button onClick={() => clearSnooze(entry.id)}>Clear Snooze</button>}
                 <button onClick={() => updateStatus(entry.id, entry.type === "job" ? "Ghosted" : "Lost")}>
                   {entry.type === "job" ? "Ghosted" : "Lost"}
                 </button>
@@ -985,6 +1068,9 @@ function Settings({
   onSaveCloudSettings,
   healthStatus,
   onCheckCloudHealth,
+  staleEntriesCount,
+  snoozedEntriesCount,
+  cloudDataStatus,
   resetLocalData
 }: {
   entries: Entry[];
@@ -999,6 +1085,9 @@ function Settings({
   onSaveCloudSettings: (next: CloudSettings) => Promise<void>;
   healthStatus: HealthStatus;
   onCheckCloudHealth: () => Promise<void>;
+  staleEntriesCount: number;
+  snoozedEntriesCount: number;
+  cloudDataStatus: "idle" | "loading" | "ready" | "error";
   resetLocalData: () => void;
 }) {
   const [exportTypeFilter, setExportTypeFilter] = useState<"all" | "job" | "freelance">("all");
@@ -1149,6 +1238,26 @@ function Settings({
       </div>
       <div className="panel">
         <div className="section-heading">
+          <h2>Ops monitor</h2>
+          <p>Live operational snapshot</p>
+        </div>
+        <div className="ops-grid">
+          <article className="stat-card inline">
+            <span>Cloud Data</span>
+            <strong>{cloudDataStatus}</strong>
+          </article>
+          <article className="stat-card inline">
+            <span>Needs Attention</span>
+            <strong>{staleEntriesCount}</strong>
+          </article>
+          <article className="stat-card inline">
+            <span>Snoozed Reminders</span>
+            <strong>{snoozedEntriesCount}</strong>
+          </article>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="section-heading">
           <h2>Cloud health</h2>
           <p>Quick runtime checks for auth and database</p>
         </div>
@@ -1281,6 +1390,12 @@ type HealthStatus =
 
 function sameId(a: Entry["id"], b: Entry["id"]) {
   return String(a) === String(b);
+}
+
+function addDaysIso(baseDate: string, days: number) {
+  const base = new Date(`${baseDate}T12:00:00+08:00`);
+  base.setDate(base.getDate() + days);
+  return base.toISOString().slice(0, 10);
 }
 
 function buildGateAStats(activityLog: ActivityLog[]): GateAStats {

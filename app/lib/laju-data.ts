@@ -21,7 +21,16 @@ export type Entry = {
 export type ActivityLog = {
   id: number | string;
   entryId: number | string;
-  action: "created" | "status_change" | "followed_up" | "ghosted" | "note_added" | "deleted" | "csv_exported";
+  action:
+    | "created"
+    | "status_change"
+    | "followed_up"
+    | "ghosted"
+    | "note_added"
+    | "deleted"
+    | "csv_exported"
+    | "snoozed"
+    | "unsnoozed";
   oldStatus?: string;
   newStatus?: string;
   note: string;
@@ -32,6 +41,7 @@ export type LajuLocalState = {
   entries: Entry[];
   activityLog: ActivityLog[];
   mode?: "sample" | "empty";
+  snoozedUntilMap?: Record<string, string>;
 };
 
 export const jobStages = ["Applied", "Interview", "Psikotest", "Offering", "Negotiation", "Accepted", "Rejected", "Ghosted"];
