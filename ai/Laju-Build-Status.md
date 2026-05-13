@@ -750,11 +750,10 @@ Current gate: v1.80 through v2.00.
 
 ## Verified
 - `npm run lint`: passed.
-- `npm run build`: passed after clean runtime reset.
+- `npm run build`: passed.
 
 ## Notes
-- Initial build attempt timed out in current machine state.
-- Clean cycle (`Stop node`, remove `.next`, rebuild) resolved and produced successful build output.
+- Build is stable in this run without extra reset.
 
 ## Next
 1. Run `qa:api` and `qa:ui` back-to-back for v2.0 RC evidence.

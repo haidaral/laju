@@ -74,9 +74,14 @@ async function run() {
       if (await typeFilter.count()) {
         await typeFilter.selectOption("job");
       }
-      const activitySearch = page.getByLabel("Search");
-      if (await activitySearch.count()) {
-        await activitySearch.fill("created");
+      const commentSearch = page.getByRole("textbox", { name: "Search comments" });
+      if (await commentSearch.count()) {
+        await commentSearch.fill("created");
+      } else {
+        const activitySearch = page.getByRole("textbox", { name: "Search", exact: true });
+        if (await activitySearch.count()) {
+          await activitySearch.fill("created");
+        }
       }
     } else {
       console.log("Settings tab not available in this auth state, using API fallback.");
