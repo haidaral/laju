@@ -1,6 +1,7 @@
 const baseUrl = process.env.LAJU_QA_BASE_URL ?? "http://localhost:3000";
 const userA = process.env.LAJU_QA_USER_A ?? "qa-user-a";
 const userB = process.env.LAJU_QA_USER_B ?? "qa-user-b";
+const strictMetadataChecks = process.env.LAJU_QA_STRICT_META === "1";
 
 function endpoint(path) {
   return `${baseUrl}${path}`;
@@ -86,7 +87,7 @@ async function run() {
   );
   if (metaA.status !== 200) {
     const text = await metaA.text();
-    if (text.includes("public.entry_meta") || text.includes("schema cache")) {
+    if (!strictMetadataChecks && (text.includes("public.entry_meta") || text.includes("schema cache"))) {
       metadataChecksEnabled = false;
       console.log("Metadata checks skipped: entry_meta migration not applied in target database.");
     } else {

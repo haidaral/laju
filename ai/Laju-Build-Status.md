@@ -857,3 +857,26 @@ Current gate: v3.00 collaboration reliability kickoff.
 1. Apply `supabase/migrations/002_laju_entry_meta.sql` to active project.
 2. Re-run `npm run qa:api` and require strict metadata assertions (no skip path).
 3. Add signed-in manual QA checklist artifact for v3.00 release sign-off.
+
+## 2026-05-13 Twenty-ninth Slice (v3.00 checklist + strict QA toggle)
+
+Current gate: v3.00 release evidence preparation.
+
+## Completed
+- Added manual QA checklist artifact:
+  - `ai/Laju-v3.00-Manual-QA-Checklist.md`
+  - includes cloud signed-in flow, metadata roundtrip, cross-user isolation, and viewer guard checks.
+- Added strict metadata QA toggle in `scripts/qa-api.mjs`:
+  - `LAJU_QA_STRICT_META=1` forces metadata checks to fail if `entry_meta` is unavailable.
+  - default mode still allows temporary skip while migration is pending.
+
+## Verified
+- `npm run qa:api`: passed in non-strict mode.
+- `npm run qa:ui`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+
+## Next
+1. Apply migration `002_laju_entry_meta.sql` on active Supabase project.
+2. Run strict QA: `LAJU_QA_STRICT_META=1 npm run qa:api`.
+3. Execute `ai/Laju-v3.00-Manual-QA-Checklist.md` and mark v3.00 gate PASS.
