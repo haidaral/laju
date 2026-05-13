@@ -71,6 +71,43 @@ async function run() {
   );
   assertStatus(createB.status, 201, "create B");
 
+  let metadataChecksEnabled = true;
+  const metaA = await request(
+    `/api/entries/${entryAId}/meta`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        assignee: "QA Owner",
+        priority: "High",
+        comments: [{ id: "qa-comment-1", text: "Roundtrip metadata", createdAt: "2026-05-13" }]
+      })
+    },
+    userA
+  );
+  if (metaA.status !== 200) {
+    const text = await metaA.text();
+    if (text.includes("public.entry_meta") || text.includes("schema cache")) {
+      metadataChecksEnabled = false;
+      console.log("Metadata checks skipped: entry_meta migration not applied in target database.");
+    } else {
+      assertStatus(metaA.status, 200, "meta update A");
+    }
+  }
+
+  if (metadataChecksEnabled) {
+    const listA = await request("/api/entries", { method: "GET", headers: {} }, userA);
+    assertStatus(listA.status, 200, "list A");
+    const listedA = await listA.json();
+    const entryMetaA = listedA.entryMetaMap?.[String(entryAId)];
+    if (!entryMetaA) throw new Error("meta roundtrip failed: missing entry meta");
+    if (entryMetaA.assignee !== "QA Owner" || entryMetaA.priority !== "High") {
+      throw new Error("meta roundtrip failed: assignee/priority mismatch");
+    }
+    if (!Array.isArray(entryMetaA.comments) || entryMetaA.comments[0]?.text !== "Roundtrip metadata") {
+      throw new Error("meta roundtrip failed: comments mismatch");
+    }
+  }
+
   const statusA = await request(
     "/api/entries/status",
     {
@@ -100,6 +137,22 @@ async function run() {
     userB
   );
   assertStatus(crossUpdate.status, 404, "cross-user PATCH");
+
+  if (metadataChecksEnabled) {
+    const crossMetaUpdate = await request(
+      `/api/entries/${entryAId}/meta`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          assignee: "Intruder",
+          priority: "Low",
+          comments: []
+        })
+      },
+      userB
+    );
+    assertStatus(crossMetaUpdate.status, 404, "cross-user meta PUT");
+  }
 
   const settingsA = await request(
     "/api/settings",

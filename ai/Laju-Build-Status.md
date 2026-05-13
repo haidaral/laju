@@ -827,3 +827,33 @@ Current gate: v2.60-v2.90 cloud collaboration durability.
 ## Next
 1. v2.91-v3.10: add metadata-aware API QA assertions (assignee/priority/comments roundtrip + cross-user isolation).
 2. Add signed-in manual QA evidence for collaboration metadata in release gate checklist.
+
+## 2026-05-13 Twenty-eighth Slice (v3.00 kickoff - QA hardening and roadmap lock)
+
+Current gate: v3.00 collaboration reliability kickoff.
+
+## Completed
+- Added roadmap artifact:
+  - `ai/Laju-v3.00-to-v4.00-Roadmap.md`
+  - defines phase tickets and exit criteria from v3.00 through v4.00.
+- Implemented metadata-aware API QA assertions in `scripts/qa-api.mjs`:
+  - `PUT /api/entries/:entryId/meta` success path for owner user.
+  - roundtrip validation via `GET /api/entries` `entryMetaMap`.
+  - cross-user metadata write isolation check (`404` expected for non-owner user).
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:ui`: passed.
+- `npm run qa:api`: passed with metadata checks conditionally skipped when target DB has not yet applied `entry_meta` migration.
+
+## Blocker
+- Current Supabase target returned:
+  - `Could not find the table 'public.entry_meta' in the schema cache`
+- Effect:
+  - metadata roundtrip and cross-user metadata assertions cannot be hard-enforced until migration `002_laju_entry_meta.sql` is applied to the active database.
+
+## Next
+1. Apply `supabase/migrations/002_laju_entry_meta.sql` to active project.
+2. Re-run `npm run qa:api` and require strict metadata assertions (no skip path).
+3. Add signed-in manual QA checklist artifact for v3.00 release sign-off.
