@@ -208,10 +208,11 @@ export default function Home() {
           if (active) setCloudDataStatus("error");
           return;
         }
-        const payload = (await response.json()) as { entries: Entry[]; activityLog: ActivityLog[] };
+        const payload = (await response.json()) as { entries: Entry[]; activityLog: ActivityLog[]; entryMetaMap?: Record<string, EntryMeta> };
         if (!active) return;
         setEntries(payload.entries ?? []);
         setActivityLog(payload.activityLog ?? []);
+        setEntryMetaMap(payload.entryMetaMap ?? {});
         setCloudDataStatus("ready");
       } catch {
         if (active) setCloudDataStatus("error");
@@ -655,14 +656,23 @@ export default function Home() {
       setEntries((current) => [payload.entry, ...current]);
       setActivityLog((current) => [payload.activity, ...current]);
       if (defaultAssignee.trim()) {
-        setEntryMetaMap((current) => ({
-          ...current,
-          [String(payload.entry.id)]: {
-            assignee: defaultAssignee.trim(),
-            priority: current[String(payload.entry.id)]?.priority ?? "Medium",
-            comments: current[String(payload.entry.id)]?.comments ?? []
-          }
-        }));
+        const nextMeta: EntryMeta = {
+          assignee: defaultAssignee.trim(),
+          priority: "Medium",
+          comments: []
+        };
+        const metaResponse = await fetch(`/api/entries/${payload.entry.id}/meta`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextMeta)
+        });
+        if (metaResponse.ok) {
+          const metaPayload = (await metaResponse.json()) as { entryId: string; meta: EntryMeta };
+          setEntryMetaMap((current) => ({
+            ...current,
+            [metaPayload.entryId]: metaPayload.meta
+          }));
+        }
       }
       setIsCreating(false);
       setOperationNotice({ type: "success", message: "Entry created." });
@@ -1023,14 +1033,23 @@ export default function Home() {
                   setEntries((current) => [payload.entry, ...current]);
                   setActivityLog((current) => [payload.activity, ...current]);
                   if (defaultAssignee.trim()) {
-                    setEntryMetaMap((current) => ({
-                      ...current,
-                      [String(payload.entry.id)]: {
-                        assignee: defaultAssignee.trim(),
-                        priority: current[String(payload.entry.id)]?.priority ?? "Medium",
-                        comments: current[String(payload.entry.id)]?.comments ?? []
-                      }
-                    }));
+                    const nextMeta: EntryMeta = {
+                      assignee: defaultAssignee.trim(),
+                      priority: "Medium",
+                      comments: []
+                    };
+                    const metaResponse = await fetch(`/api/entries/${payload.entry.id}/meta`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(nextMeta)
+                    });
+                    if (metaResponse.ok) {
+                      const metaPayload = (await metaResponse.json()) as { entryId: string; meta: EntryMeta };
+                      setEntryMetaMap((current) => ({
+                        ...current,
+                        [metaPayload.entryId]: metaPayload.meta
+                      }));
+                    }
                   }
                 } else {
                   setEntries((current) => [entry, ...current]);
@@ -1104,12 +1123,30 @@ export default function Home() {
                 deleteEntry={deleteEntry}
                 close={() => setSelectedEntry(null)}
                 meta={entryMetaMap[String(selectedEntry.id)]}
-                updateMeta={(meta) =>
+                updateMeta={async (meta) => {
+                  const entryKey = String(selectedEntry.id);
+                  if (dataMode === "cloud" && typeof selectedEntry.id === "string") {
+                    const response = await fetch(`/api/entries/${selectedEntry.id}/meta`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(meta)
+                    });
+                    if (response.ok) {
+                      const payload = (await response.json()) as { entryId: string; meta: EntryMeta };
+                      setEntryMetaMap((current) => ({
+                        ...current,
+                        [payload.entryId]: payload.meta
+                      }));
+                      return;
+                    }
+                    setOperationNotice({ type: "error", message: "Failed to save collaboration metadata." });
+                    return;
+                  }
                   setEntryMetaMap((current) => ({
                     ...current,
-                    [String(selectedEntry.id)]: meta
-                  }))
-                }
+                    [entryKey]: meta
+                  }));
+                }}
               />
             ) : null}
           </aside>
@@ -2357,7 +2394,7 @@ function EntryDetail({
   deleteEntry: (id: Entry["id"]) => void;
   close: () => void;
   meta?: EntryMeta;
-  updateMeta: (meta: EntryMeta) => void;
+  updateMeta: (meta: EntryMeta) => void | Promise<void>;
 }) {
   const stages = getStages(entry.type);
   const [draft, setDraft] = useState<Entry>(entry);
@@ -2383,7 +2420,7 @@ function EntryDetail({
       location: draft.location.trim() || "Remote",
       value: draft.value.trim() || "TBD"
     });
-    updateMeta({
+    void updateMeta({
       assignee,
       priority,
       comments
@@ -2479,7 +2516,7 @@ function EntryDetail({
             onClick={() => {
               const text = commentText.trim();
               if (!text) return;
-              updateMeta({
+              void updateMeta({
                 assignee,
                 priority,
                 comments: [

@@ -792,3 +792,38 @@ Current gate: v2.10-v2.50 productivity extension.
 ## Next
 1. v2.6-v2.9: push collaboration metadata to cloud persistence (assignee/priority/comments) instead of local-only.
 2. Add signed-in manual QA evidence for v2.5 in release gate checklist.
+
+## 2026-05-13 Twenty-seventh Slice (v2.60-v2.90 cloud collaboration persistence)
+
+Current gate: v2.60-v2.90 cloud collaboration durability.
+
+## Completed
+- Added collaboration metadata persistence model:
+  - new Supabase migration `supabase/migrations/002_laju_entry_meta.sql`
+  - table: `entry_meta` (`entry_id`, `user_id`, `assignee`, `priority`, `comments`, `updated_at`)
+  - user-scoped RLS policy for metadata.
+- Extended repository contract:
+  - `listEntriesWithActivity` now returns `entryMetaMap`.
+  - added `upsertEntryMeta(userId, entryId, meta)` with user-scope validation.
+- Added API route:
+  - `PUT /api/entries/:entryId/meta`
+  - validates assignee/priority/comments payload and returns user-scoped 404 when entry is outside owner scope.
+- Wired frontend cloud behavior:
+  - cloud load now hydrates `entryMetaMap` from `/api/entries`.
+  - entry detail collaboration save now writes through `/api/entries/:entryId/meta` in cloud mode.
+  - default assignee auto-assign now persists to cloud for:
+    - Add Entry flow
+    - CSV import flow
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed.
+- `npm run qa:ui`: passed after local dev restart cycle.
+
+## Notes
+- Local Next.js runtime on this machine remains intermittently unstable during long QA runs. Stable pass was obtained after restarting localhost dev server on port 3000.
+
+## Next
+1. v2.91-v3.10: add metadata-aware API QA assertions (assignee/priority/comments roundtrip + cross-user isolation).
+2. Add signed-in manual QA evidence for collaboration metadata in release gate checklist.

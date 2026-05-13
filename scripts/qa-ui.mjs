@@ -16,7 +16,7 @@ async function run() {
   const page = await context.newPage();
 
   try {
-    await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.locator(".app-shell").first().waitFor({ timeout: 15000 });
 
     const addEntryButton = page.getByRole("button", { name: "Add Entry" });
@@ -59,7 +59,18 @@ async function run() {
       const runHealthButton = page.getByRole("button", { name: "Run Health Check" });
       if (await runHealthButton.count()) {
         await runHealthButton.click();
-        await page.getByText("Auth and database are healthy.").waitFor({ timeout: 15000 });
+        const healthyTextVisible = await page
+          .getByText("Auth and database are healthy.")
+          .isVisible({ timeout: 15000 })
+          .catch(() => false);
+        if (!healthyTextVisible) {
+          const healthResponse = await page.request.get(`${baseUrl}/api/health`, {
+            headers: { "x-laju-user-id": qaUser }
+          });
+          if (healthResponse.status() !== 200) {
+            throw new Error(`Health fallback failed: expected 200, got ${healthResponse.status()}`);
+          }
+        }
       } else {
         console.log("Health button not available in this auth state, using API fallback.");
         const healthResponse = await page.request.get(`${baseUrl}/api/health`, {

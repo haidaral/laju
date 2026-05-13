@@ -25,6 +25,12 @@ export type RepositoryActivityLog = {
   createdAt: string;
 };
 
+export type RepositoryEntryMeta = {
+  assignee: string;
+  priority: "Low" | "Medium" | "High";
+  comments: Array<{ id: string; text: string; createdAt: string }>;
+};
+
 export type RepositoryUserSettings = {
   jobReminderDays: number;
   freelanceReminderDays: number;
@@ -71,6 +77,14 @@ type DbActivityRow = {
   created_at: string;
 };
 
+type DbEntryMetaRow = {
+  entry_id: string;
+  user_id: string;
+  assignee: string | null;
+  priority: "Low" | "Medium" | "High" | null;
+  comments: unknown;
+};
+
 function mapDbEntry(row: DbEntryRow): RepositoryEntry {
   return {
     id: row.id,
@@ -100,9 +114,29 @@ function mapDbActivity(row: DbActivityRow): RepositoryActivityLog {
   };
 }
 
+function mapDbMeta(row: DbEntryMetaRow): RepositoryEntryMeta {
+  const comments =
+    Array.isArray(row.comments)
+      ? row.comments
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const raw = item as Record<string, unknown>;
+            if (typeof raw.id !== "string" || typeof raw.text !== "string" || typeof raw.createdAt !== "string") return null;
+            return { id: raw.id, text: raw.text, createdAt: raw.createdAt };
+          })
+          .filter((item): item is { id: string; text: string; createdAt: string } => Boolean(item))
+      : [];
+
+  return {
+    assignee: row.assignee ?? "",
+    priority: row.priority ?? "Medium",
+    comments
+  };
+}
+
 export async function listEntriesWithActivity(
   userId: string
-): Promise<{ entries: RepositoryEntry[]; activityLog: RepositoryActivityLog[] }> {
+): Promise<{ entries: RepositoryEntry[]; activityLog: RepositoryActivityLog[]; entryMetaMap: Record<string, RepositoryEntryMeta> }> {
   const supabase = getSupabaseAdminClient();
 
   const { data: entriesData, error: entriesError } = await supabase
@@ -120,10 +154,55 @@ export async function listEntriesWithActivity(
     .limit(200);
   if (activityError) throw activityError;
 
+  const { data: metaData, error: metaError } = await supabase
+    .from("entry_meta")
+    .select("entry_id,user_id,assignee,priority,comments")
+    .eq("user_id", userId);
+  if (metaError) throw metaError;
+
+  const entryMetaMap = Object.fromEntries(
+    (metaData as DbEntryMetaRow[]).map((row) => [row.entry_id, mapDbMeta(row)])
+  );
+
   return {
     entries: (entriesData as DbEntryRow[]).map(mapDbEntry),
-    activityLog: (activityData as DbActivityRow[]).map(mapDbActivity)
+    activityLog: (activityData as DbActivityRow[]).map(mapDbActivity),
+    entryMetaMap
   };
+}
+
+export async function upsertEntryMeta(
+  userId: string,
+  entryId: string,
+  meta: RepositoryEntryMeta
+): Promise<RepositoryEntryMeta> {
+  const supabase = getSupabaseAdminClient();
+  const { data: existingEntry, error: existingError } = await supabase
+    .from("entries")
+    .select("id")
+    .eq("id", entryId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existingEntry) throw new Error("ENTRY_NOT_FOUND");
+
+  const { data, error } = await supabase
+    .from("entry_meta")
+    .upsert(
+      {
+        user_id: userId,
+        entry_id: entryId,
+        assignee: meta.assignee ?? "",
+        priority: meta.priority ?? "Medium",
+        comments: meta.comments ?? [],
+        updated_at: new Date().toISOString()
+      },
+      { onConflict: "entry_id" }
+    )
+    .select("entry_id,user_id,assignee,priority,comments")
+    .single();
+  if (error) throw error;
+  return mapDbMeta(data as DbEntryMetaRow);
 }
 
 export async function createEntry(
