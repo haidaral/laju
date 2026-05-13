@@ -732,3 +732,30 @@ Current gate: v1.60-v1.70.
 ## Next
 1. Stabilize local build runtime (clean restart cycle and process isolation) then re-run full build and QA.
 2. Continue v1.80-v2.00 with assignment filters, comment search, and production release artifacts.
+
+## 2026-05-13 Twenty-fifth Slice (v1.80-v2.00 collaboration search + release gate)
+
+Current gate: v1.80 through v2.00.
+
+## Completed
+- v1.80 assignment filter:
+  - Added assignee-based filter in pipeline toolbar.
+  - Filters by collaboration metadata assignee field.
+- v1.90 collaboration search:
+  - Added global comment search panel in Settings.
+  - Search across comment text, assignee, and priority.
+  - Includes entry reference + timestamp in results.
+- v2.00 release artifacts:
+  - Added `ai/Laju-v2.00-Release-Gate.md` with scope, QA gates, and sign-off checklist.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed after clean runtime reset.
+
+## Notes
+- Initial build attempt timed out in current machine state.
+- Clean cycle (`Stop node`, remove `.next`, rebuild) resolved and produced successful build output.
+
+## Next
+1. Run `qa:api` and `qa:ui` back-to-back for v2.0 RC evidence.
+2. Execute signed-in manual checklist from `ai/Laju-v2.00-Release-Gate.md`.

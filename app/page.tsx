@@ -57,6 +57,7 @@ export default function Home() {
   const [quickTitle, setQuickTitle] = useState("");
   const [quickCompany, setQuickCompany] = useState("");
   const [quickPlatform, setQuickPlatform] = useState("Direct");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [entryMetaMap, setEntryMetaMap] = useState<Record<string, EntryMeta>>({});
 
   useEffect(() => {
@@ -858,6 +859,9 @@ export default function Home() {
             type={activeView === "jobs" ? "job" : "freelance"}
             filter={filter}
             setFilter={setFilter}
+            assigneeFilter={assigneeFilter}
+            setAssigneeFilter={setAssigneeFilter}
+            entryMetaMap={entryMetaMap}
             view={pipelineView}
             setView={setPipelineView}
             updateStatus={updateStatus}
@@ -965,6 +969,7 @@ export default function Home() {
               }
               setOperationNotice({ type: "success", message: `Imported ${imported} entries.` });
             }}
+            entryMetaMap={entryMetaMap}
             staleEntriesCount={staleEntries.length}
             snoozedEntriesCount={snoozedEntriesCount}
             cloudDataStatus={cloudDataStatus}
@@ -1195,6 +1200,9 @@ function Pipeline({
   type,
   filter,
   setFilter,
+  assigneeFilter,
+  setAssigneeFilter,
+  entryMetaMap,
   view,
   setView,
   updateStatus,
@@ -1212,6 +1220,9 @@ function Pipeline({
   type: PipelineType;
   filter: string;
   setFilter: (value: string) => void;
+  assigneeFilter: string;
+  setAssigneeFilter: (value: string) => void;
+  entryMetaMap: Record<string, EntryMeta>;
   view: "kanban" | "table";
   setView: (value: "kanban" | "table") => void;
   updateStatus: (id: Entry["id"], status: string) => void;
@@ -1226,7 +1237,23 @@ function Pipeline({
   setSelectedEntryIds: (value: string[]) => void;
 }) {
   const stages = getStages(type);
-  const pipelineEntries = entries.filter((entry) => entry.type === type && (filter === "All" || entry.platform === filter));
+  const assignees = Array.from(
+    new Set(
+      entries
+        .filter((entry) => entry.type === type)
+        .map((entry) => entryMetaMap[String(entry.id)]?.assignee?.trim())
+        .filter((value): value is string => Boolean(value))
+    )
+  ).sort();
+  const pipelineEntries = entries.filter((entry) => {
+    if (entry.type !== type) return false;
+    if (filter !== "All" && entry.platform !== filter) return false;
+    if (assigneeFilter !== "all") {
+      const assignee = entryMetaMap[String(entry.id)]?.assignee?.trim() ?? "";
+      if (assignee !== assigneeFilter) return false;
+    }
+    return true;
+  });
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
   const [bulkStatus, setBulkStatus] = useState(stages[0] ?? "");
   const [viewName, setViewName] = useState("");
@@ -1252,6 +1279,14 @@ function Pipeline({
         <select value={filter} onChange={(event) => setFilter(event.target.value)}>
           {platforms.map((platform) => (
             <option key={platform}>{platform}</option>
+          ))}
+        </select>
+        <select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>
+          <option value="all">All assignees</option>
+          {assignees.map((assignee) => (
+            <option key={assignee} value={assignee}>
+              {assignee}
+            </option>
           ))}
         </select>
         <div className="row-actions">
@@ -1505,6 +1540,7 @@ function Settings({
   healthCheckedAt,
   onCheckCloudHealth,
   onImportCsv,
+  entryMetaMap,
   staleEntriesCount,
   snoozedEntriesCount,
   cloudDataStatus,
@@ -1531,6 +1567,7 @@ function Settings({
   healthCheckedAt: string;
   onCheckCloudHealth: () => Promise<void>;
   onImportCsv: (rows: CsvImportRow[]) => Promise<void>;
+  entryMetaMap: Record<string, EntryMeta>;
   staleEntriesCount: number;
   snoozedEntriesCount: number;
   cloudDataStatus: "idle" | "loading" | "ready" | "error";
@@ -1546,6 +1583,7 @@ function Settings({
   const [csvImportText, setCsvImportText] = useState("");
   const [csvImportStatus, setCsvImportStatus] = useState<"idle" | "parsing" | "importing" | "done" | "error">("idle");
   const [csvImportMode, setCsvImportMode] = useState<"skip_duplicates" | "allow_duplicates">("skip_duplicates");
+  const [commentSearchQuery, setCommentSearchQuery] = useState("");
 
   const exportStatuses = Array.from(new Set(entries.map((entry) => entry.status))).sort();
   const filteredEntriesForExport = entries.filter((entry) => {
@@ -1565,6 +1603,25 @@ function Settings({
       return activity.note.toLowerCase().includes(q) || activity.action.toLowerCase().includes(q);
     })
     .slice(0, 30);
+  const commentIndex = Object.entries(entryMetaMap)
+    .flatMap(([entryId, meta]) =>
+      meta.comments.map((comment) => ({
+        entryId,
+        assignee: meta.assignee,
+        priority: meta.priority,
+        ...comment
+      }))
+    )
+    .filter((comment) => {
+      if (!commentSearchQuery.trim()) return true;
+      const q = commentSearchQuery.toLowerCase();
+      return (
+        comment.text.toLowerCase().includes(q) ||
+        comment.assignee.toLowerCase().includes(q) ||
+        comment.priority.toLowerCase().includes(q)
+      );
+    })
+    .slice(0, 40);
   let healthMessage = "No health check yet.";
   if (healthStatus.status === "loading") {
     healthMessage = "Running health check...";
@@ -1830,6 +1887,30 @@ function Settings({
                 ? "Import failed. Check CSV format."
                 : "Ready to import."}
           </p>
+        </div>
+      </div>
+      <div className="panel wide">
+        <div className="section-heading">
+          <h2>Comment search</h2>
+          <p>Search collaboration notes by text, assignee, or priority</p>
+        </div>
+        <label>
+          Search comments
+          <input value={commentSearchQuery} onChange={(event) => setCommentSearchQuery(event.target.value)} placeholder="e.g. handoff, high, haidar" />
+        </label>
+        <div className="activity-list compact">
+          {commentIndex.map((comment) => (
+            <div className="activity-row" key={comment.id}>
+              <div>
+                <strong>{comment.text}</strong>
+                <span>
+                  Entry #{comment.entryId} - {comment.assignee || "Unassigned"} - {comment.priority}
+                </span>
+              </div>
+              <em>{comment.createdAt}</em>
+            </div>
+          ))}
+          {!commentIndex.length && <p className="empty">No comments found for this query.</p>}
         </div>
       </div>
       <div className="panel wide">
