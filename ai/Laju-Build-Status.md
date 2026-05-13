@@ -758,3 +758,37 @@ Current gate: v1.80 through v2.00.
 ## Next
 1. Run `qa:api` and `qa:ui` back-to-back for v2.0 RC evidence.
 2. Execute signed-in manual checklist from `ai/Laju-v2.00-Release-Gate.md`.
+
+## 2026-05-13 Twenty-sixth Slice (v2.10-v2.50 operator customization + control)
+
+Current gate: v2.10-v2.50 productivity extension.
+
+## Completed
+- v2.10 table customization:
+  - Added table-column visibility toggles (Platform, Assignee, Priority, Status, Value, Updated).
+  - Persisted column visibility in local state.
+- v2.20 pipeline sort controls:
+  - Added sort modes: Updated newest, Updated oldest, Priority high-low, Title A-Z.
+  - Applied sorting consistently to pipeline entries before Kanban/Table render.
+- v2.30 default assignment automation:
+  - Added `Default assignee` setting in Interface Style panel.
+  - Auto-assigns new entries from:
+    - Add Entry drawer
+    - Quick Capture
+    - CSV import (local and cloud-created entries)
+  - Persists default assignee in local state.
+- v2.40 QA stability hardening:
+  - Updated UI QA startup check to wait for `.app-shell` instead of assuming `Overview` heading.
+  - Keeps auth-state-tolerant behavior intact.
+- v2.50 persistence contract update:
+  - Extended `LajuLocalState` type for new persisted controls (`pipelineSort`, `defaultAssignee`, `tableColumns`).
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed.
+- `npm run qa:ui`: passed.
+
+## Next
+1. v2.6-v2.9: push collaboration metadata to cloud persistence (assignee/priority/comments) instead of local-only.
+2. Add signed-in manual QA evidence for v2.5 in release gate checklist.

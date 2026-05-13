@@ -48,6 +48,16 @@ export type LajuLocalState = {
   darkMode?: boolean;
   savedViews?: SavedView[];
   entryMetaMap?: Record<string, EntryMeta>;
+  pipelineSort?: "updated_desc" | "updated_asc" | "priority_desc" | "title_asc";
+  defaultAssignee?: string;
+  tableColumns?: {
+    platform: boolean;
+    status: boolean;
+    value: boolean;
+    updated: boolean;
+    assignee: boolean;
+    priority: boolean;
+  };
 };
 
 export type SavedView = {

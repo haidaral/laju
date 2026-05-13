@@ -17,7 +17,7 @@ async function run() {
 
   try {
     await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Overview" }).waitFor({ timeout: 15000 });
+    await page.locator(".app-shell").first().waitFor({ timeout: 15000 });
 
     const addEntryButton = page.getByRole("button", { name: "Add Entry" });
     if (await addEntryButton.count()) {

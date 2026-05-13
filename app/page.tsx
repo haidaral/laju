@@ -59,6 +59,16 @@ export default function Home() {
   const [quickPlatform, setQuickPlatform] = useState("Direct");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [entryMetaMap, setEntryMetaMap] = useState<Record<string, EntryMeta>>({});
+  const [pipelineSort, setPipelineSort] = useState<PipelineSort>("updated_desc");
+  const [defaultAssignee, setDefaultAssignee] = useState("");
+  const [tableColumns, setTableColumns] = useState<TableColumnsState>({
+    platform: true,
+    status: true,
+    value: true,
+    updated: true,
+    assignee: true,
+    priority: true
+  });
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -75,6 +85,18 @@ export default function Home() {
           setDarkMode(Boolean(parsed.darkMode));
           setSavedViews(parsed.savedViews ?? []);
           setEntryMetaMap(parsed.entryMetaMap ?? {});
+          setPipelineSort(parsed.pipelineSort ?? "updated_desc");
+          setDefaultAssignee(parsed.defaultAssignee ?? "");
+          setTableColumns(
+            parsed.tableColumns ?? {
+              platform: true,
+              status: true,
+              value: true,
+              updated: true,
+              assignee: true,
+              priority: true
+            }
+          );
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
@@ -86,6 +108,18 @@ export default function Home() {
           setDarkMode(Boolean(parsed.darkMode));
           setSavedViews(parsed.savedViews ?? []);
           setEntryMetaMap(parsed.entryMetaMap ?? {});
+          setPipelineSort(parsed.pipelineSort ?? "updated_desc");
+          setDefaultAssignee(parsed.defaultAssignee ?? "");
+          setTableColumns(
+            parsed.tableColumns ?? {
+              platform: true,
+              status: true,
+              value: true,
+              updated: true,
+              assignee: true,
+              priority: true
+            }
+          );
           setMode("sample");
         }
       } catch {
@@ -98,6 +132,16 @@ export default function Home() {
         setDarkMode(false);
         setSavedViews([]);
         setEntryMetaMap({});
+        setPipelineSort("updated_desc");
+        setDefaultAssignee("");
+        setTableColumns({
+          platform: true,
+          status: true,
+          value: true,
+          updated: true,
+          assignee: true,
+          priority: true
+        });
         setMode("sample");
       }
     }
@@ -119,10 +163,13 @@ export default function Home() {
         compactMode,
         darkMode,
         savedViews,
-        entryMetaMap
+        entryMetaMap,
+        pipelineSort,
+        defaultAssignee,
+        tableColumns
       })
     );
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews, entryMetaMap]);
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews, entryMetaMap, pipelineSort, defaultAssignee, tableColumns]);
 
   useEffect(() => {
     let active = true;
@@ -607,6 +654,16 @@ export default function Home() {
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => [payload.entry, ...current]);
       setActivityLog((current) => [payload.activity, ...current]);
+      if (defaultAssignee.trim()) {
+        setEntryMetaMap((current) => ({
+          ...current,
+          [String(payload.entry.id)]: {
+            assignee: defaultAssignee.trim(),
+            priority: current[String(payload.entry.id)]?.priority ?? "Medium",
+            comments: current[String(payload.entry.id)]?.comments ?? []
+          }
+        }));
+      }
       setIsCreating(false);
       setOperationNotice({ type: "success", message: "Entry created." });
       return;
@@ -624,6 +681,16 @@ export default function Home() {
       },
       ...current
     ]);
+    if (defaultAssignee.trim()) {
+      setEntryMetaMap((current) => ({
+        ...current,
+        [String(entry.id)]: {
+          assignee: defaultAssignee.trim(),
+          priority: current[String(entry.id)]?.priority ?? "Medium",
+          comments: current[String(entry.id)]?.comments ?? []
+        }
+      }));
+    }
     setIsCreating(false);
     setOperationNotice({ type: "success", message: "Entry created." });
   }
@@ -874,6 +941,10 @@ export default function Home() {
             selectEntry={setSelectedEntry}
             selectedEntryIds={selectedPipelineEntryIds}
             setSelectedEntryIds={setSelectedPipelineEntryIds}
+            pipelineSort={pipelineSort}
+            setPipelineSort={setPipelineSort}
+            tableColumns={tableColumns}
+            setTableColumns={setTableColumns}
           />
         )}
 
@@ -951,6 +1022,16 @@ export default function Home() {
                   const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
                   setEntries((current) => [payload.entry, ...current]);
                   setActivityLog((current) => [payload.activity, ...current]);
+                  if (defaultAssignee.trim()) {
+                    setEntryMetaMap((current) => ({
+                      ...current,
+                      [String(payload.entry.id)]: {
+                        assignee: defaultAssignee.trim(),
+                        priority: current[String(payload.entry.id)]?.priority ?? "Medium",
+                        comments: current[String(payload.entry.id)]?.comments ?? []
+                      }
+                    }));
+                  }
                 } else {
                   setEntries((current) => [entry, ...current]);
                   setActivityLog((current) => [
@@ -964,6 +1045,16 @@ export default function Home() {
                     },
                     ...current
                   ]);
+                  if (defaultAssignee.trim()) {
+                    setEntryMetaMap((current) => ({
+                      ...current,
+                      [String(entry.id)]: {
+                        assignee: defaultAssignee.trim(),
+                        priority: current[String(entry.id)]?.priority ?? "Medium",
+                        comments: current[String(entry.id)]?.comments ?? []
+                      }
+                    }));
+                  }
                 }
                 imported += 1;
               }
@@ -973,6 +1064,8 @@ export default function Home() {
             staleEntriesCount={staleEntries.length}
             snoozedEntriesCount={snoozedEntriesCount}
             cloudDataStatus={cloudDataStatus}
+            defaultAssignee={defaultAssignee}
+            setDefaultAssignee={setDefaultAssignee}
             resetLocalData={() => {
               if (userRole === "viewer") {
                 setOperationNotice({ type: "error", message: "Viewer role cannot reset data." });
@@ -983,6 +1076,16 @@ export default function Home() {
               setSnoozedUntilMap({});
               setEntryMetaMap({});
               setSelectedEntry(null);
+              setDefaultAssignee("");
+              setPipelineSort("updated_desc");
+              setTableColumns({
+                platform: true,
+                status: true,
+                value: true,
+                updated: true,
+                assignee: true,
+                priority: true
+              });
               setMode("sample");
             }}
           />
@@ -1214,7 +1317,11 @@ function Pipeline({
   markFollowedUp,
   selectEntry,
   selectedEntryIds,
-  setSelectedEntryIds
+  setSelectedEntryIds,
+  pipelineSort,
+  setPipelineSort,
+  tableColumns,
+  setTableColumns
 }: {
   entries: Entry[];
   type: PipelineType;
@@ -1235,6 +1342,10 @@ function Pipeline({
   selectEntry: (entry: Entry) => void;
   selectedEntryIds: string[];
   setSelectedEntryIds: (value: string[]) => void;
+  pipelineSort: PipelineSort;
+  setPipelineSort: (value: PipelineSort) => void;
+  tableColumns: TableColumnsState;
+  setTableColumns: (value: TableColumnsState) => void;
 }) {
   const stages = getStages(type);
   const assignees = Array.from(
@@ -1245,15 +1356,28 @@ function Pipeline({
         .filter((value): value is string => Boolean(value))
     )
   ).sort();
-  const pipelineEntries = entries.filter((entry) => {
-    if (entry.type !== type) return false;
-    if (filter !== "All" && entry.platform !== filter) return false;
-    if (assigneeFilter !== "all") {
-      const assignee = entryMetaMap[String(entry.id)]?.assignee?.trim() ?? "";
-      if (assignee !== assigneeFilter) return false;
-    }
-    return true;
-  });
+  const pipelineEntries = entries
+    .filter((entry) => {
+      if (entry.type !== type) return false;
+      if (filter !== "All" && entry.platform !== filter) return false;
+      if (assigneeFilter !== "all") {
+        const assignee = entryMetaMap[String(entry.id)]?.assignee?.trim() ?? "";
+        if (assignee !== assigneeFilter) return false;
+      }
+      return true;
+    })
+    .sort((left, right) => {
+      if (pipelineSort === "updated_asc") return left.lastUpdated.localeCompare(right.lastUpdated);
+      if (pipelineSort === "priority_desc") {
+        const rank: Record<EntryMeta["priority"], number> = { High: 3, Medium: 2, Low: 1 };
+        const leftPriority = rank[entryMetaMap[String(left.id)]?.priority ?? "Medium"];
+        const rightPriority = rank[entryMetaMap[String(right.id)]?.priority ?? "Medium"];
+        if (leftPriority !== rightPriority) return rightPriority - leftPriority;
+        return right.lastUpdated.localeCompare(left.lastUpdated);
+      }
+      if (pipelineSort === "title_asc") return left.title.localeCompare(right.title);
+      return right.lastUpdated.localeCompare(left.lastUpdated);
+    });
   const platforms = ["All", ...Array.from(new Set(entries.filter((entry) => entry.type === type).map((entry) => entry.platform)))];
   const [bulkStatus, setBulkStatus] = useState(stages[0] ?? "");
   const [viewName, setViewName] = useState("");
@@ -1289,6 +1413,12 @@ function Pipeline({
             </option>
           ))}
         </select>
+        <select value={pipelineSort} onChange={(event) => setPipelineSort(event.target.value as PipelineSort)}>
+          <option value="updated_desc">Sort: Updated (Newest)</option>
+          <option value="updated_asc">Sort: Updated (Oldest)</option>
+          <option value="priority_desc">Sort: Priority (High-Low)</option>
+          <option value="title_asc">Sort: Title (A-Z)</option>
+        </select>
         <div className="row-actions">
           <input value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="Save current view" />
           <button
@@ -1318,6 +1448,30 @@ function Pipeline({
         </div>
         {view === "table" && (
           <div className="row-actions">
+            <label className="toggle-pill">
+              <input
+                type="checkbox"
+                checked={tableColumns.platform}
+                onChange={(event) => setTableColumns({ ...tableColumns, platform: event.target.checked })}
+              />
+              Platform
+            </label>
+            <label className="toggle-pill">
+              <input
+                type="checkbox"
+                checked={tableColumns.assignee}
+                onChange={(event) => setTableColumns({ ...tableColumns, assignee: event.target.checked })}
+              />
+              Assignee
+            </label>
+            <label className="toggle-pill">
+              <input
+                type="checkbox"
+                checked={tableColumns.priority}
+                onChange={(event) => setTableColumns({ ...tableColumns, priority: event.target.checked })}
+              />
+              Priority
+            </label>
             <select value={bulkStatus} onChange={(event) => setBulkStatus(event.target.value)}>
               {stages.map((stage) => (
                 <option key={stage}>{stage}</option>
@@ -1372,10 +1526,12 @@ function Pipeline({
               <tr>
                 <th>Select</th>
                 <th>Opportunity</th>
-                <th>Platform</th>
-                <th>Status</th>
-                <th>Value</th>
-                <th>Updated</th>
+                {tableColumns.platform && <th>Platform</th>}
+                {tableColumns.status && <th>Status</th>}
+                {tableColumns.value && <th>Value</th>}
+                {tableColumns.assignee && <th>Assignee</th>}
+                {tableColumns.priority && <th>Priority</th>}
+                {tableColumns.updated && <th>Updated</th>}
               </tr>
             </thead>
             <tbody>
@@ -1399,10 +1555,12 @@ function Pipeline({
                     <strong>{entry.title}</strong>
                     <span>{entry.company}</span>
                   </td>
-                  <td>{entry.platform}</td>
-                  <td>{entry.status}</td>
-                  <td>{entry.value}</td>
-                  <td>{daysSince(entry.lastUpdated)}d ago</td>
+                  {tableColumns.platform && <td>{entry.platform}</td>}
+                  {tableColumns.status && <td>{entry.status}</td>}
+                  {tableColumns.value && <td>{entry.value}</td>}
+                  {tableColumns.assignee && <td>{entryMetaMap[String(entry.id)]?.assignee || "-"}</td>}
+                  {tableColumns.priority && <td>{entryMetaMap[String(entry.id)]?.priority || "Medium"}</td>}
+                  {tableColumns.updated && <td>{daysSince(entry.lastUpdated)}d ago</td>}
                 </tr>
               ))}
             </tbody>
@@ -1544,7 +1702,9 @@ function Settings({
   staleEntriesCount,
   snoozedEntriesCount,
   cloudDataStatus,
-  resetLocalData
+  resetLocalData,
+  defaultAssignee,
+  setDefaultAssignee
 }: {
   entries: Entry[];
   activityLog: ActivityLog[];
@@ -1572,6 +1732,8 @@ function Settings({
   snoozedEntriesCount: number;
   cloudDataStatus: "idle" | "loading" | "ready" | "error";
   resetLocalData: () => void;
+  defaultAssignee: string;
+  setDefaultAssignee: (value: string) => void;
 }) {
   const [exportTypeFilter, setExportTypeFilter] = useState<"all" | "job" | "freelance">("all");
   const [exportStatusFilter, setExportStatusFilter] = useState("all");
@@ -1707,6 +1869,14 @@ function Settings({
         <label className="toggle-row">
           <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
           Dark mode
+        </label>
+        <label>
+          Default assignee
+          <input
+            value={defaultAssignee}
+            onChange={(event) => setDefaultAssignee(event.target.value)}
+            placeholder="Auto-assign new entries"
+          />
         </label>
       </div>
       <div className="panel">
@@ -1972,6 +2142,15 @@ type GateAStats = {
 type DataMode = "local" | "cloud";
 type UserRole = "owner" | "member" | "viewer";
 type UiPreset = "notion" | "trello" | "asana" | "github";
+type PipelineSort = "updated_desc" | "updated_asc" | "priority_desc" | "title_asc";
+type TableColumnsState = {
+  platform: boolean;
+  status: boolean;
+  value: boolean;
+  updated: boolean;
+  assignee: boolean;
+  priority: boolean;
+};
 type CloudSettings = {
   jobReminderDays: number;
   freelanceReminderDays: number;
