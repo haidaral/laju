@@ -880,3 +880,33 @@ Current gate: v3.00 release evidence preparation.
 1. Apply migration `002_laju_entry_meta.sql` on active Supabase project.
 2. Run strict QA: `LAJU_QA_STRICT_META=1 npm run qa:api`.
 3. Execute `ai/Laju-v3.00-Manual-QA-Checklist.md` and mark v3.00 gate PASS.
+
+## 2026-05-14 Thirtieth Slice (v3.10 team-ops foundation kickoff)
+
+Current gate: v3.10-v3.30 team operations foundation.
+
+## Completed
+- Upgraded role model for app state:
+  - added `admin` role option alongside `owner/member/viewer`.
+  - persisted role union update in `LajuLocalState`.
+- Added operator profile and queue filtering:
+  - new persisted `currentUserName`.
+  - new `My Queue` toggle in pipeline toolbar.
+  - when enabled, pipeline filters entries to assignee matching current operator.
+- Extended settings controls:
+  - `Operator name` field in Interface style.
+  - settings helper text now shows active operator.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed (metadata checks still skip when migration is missing).
+- `npm run qa:ui`: passed.
+
+## Notes
+- Build and QA on this machine still require occasional warm-up/restart timing for localhost.
+
+## Next
+1. v3.20: add assignee workload board in Overview (`My Queue`, `Unassigned`, `Team load` metrics).
+2. v3.30: role-permission matrix surface and stricter write-control messaging by role tier.
+3. Keep migration strict-mode blocker path for metadata until `entry_meta` table is live.

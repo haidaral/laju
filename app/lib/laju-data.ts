@@ -42,7 +42,8 @@ export type LajuLocalState = {
   activityLog: ActivityLog[];
   mode?: "sample" | "empty";
   snoozedUntilMap?: Record<string, string>;
-  role?: "owner" | "member" | "viewer";
+  role?: "owner" | "admin" | "member" | "viewer";
+  currentUserName?: string;
   uiPreset?: "notion" | "trello" | "asana" | "github";
   compactMode?: boolean;
   darkMode?: boolean;

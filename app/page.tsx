@@ -48,6 +48,7 @@ export default function Home() {
   const [snoozedUntilMap, setSnoozedUntilMap] = useState<Record<string, string>>({});
   const [selectedPipelineEntryIds, setSelectedPipelineEntryIds] = useState<string[]>([]);
   const [userRole, setUserRole] = useState<UserRole>("owner");
+  const [currentUserName, setCurrentUserName] = useState("Owner");
   const [uiPreset, setUiPreset] = useState<UiPreset>("notion");
   const [compactMode, setCompactMode] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -58,6 +59,7 @@ export default function Home() {
   const [quickCompany, setQuickCompany] = useState("");
   const [quickPlatform, setQuickPlatform] = useState("Direct");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [myQueueOnly, setMyQueueOnly] = useState(false);
   const [entryMetaMap, setEntryMetaMap] = useState<Record<string, EntryMeta>>({});
   const [pipelineSort, setPipelineSort] = useState<PipelineSort>("updated_desc");
   const [defaultAssignee, setDefaultAssignee] = useState("");
@@ -80,6 +82,7 @@ export default function Home() {
           setActivityLog(parsed.activityLog ?? []);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setUserRole(parsed.role ?? "owner");
+          setCurrentUserName(parsed.currentUserName ?? "Owner");
           setUiPreset(parsed.uiPreset ?? "notion");
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
@@ -103,6 +106,7 @@ export default function Home() {
           setActivityLog(parsed.activityLog?.length ? parsed.activityLog : initialActivityLog);
           setSnoozedUntilMap(parsed.snoozedUntilMap ?? {});
           setUserRole(parsed.role ?? "owner");
+          setCurrentUserName(parsed.currentUserName ?? "Owner");
           setUiPreset(parsed.uiPreset ?? "notion");
           setCompactMode(Boolean(parsed.compactMode));
           setDarkMode(Boolean(parsed.darkMode));
@@ -127,6 +131,7 @@ export default function Home() {
         setActivityLog(initialActivityLog);
         setSnoozedUntilMap({});
         setUserRole("owner");
+        setCurrentUserName("Owner");
         setUiPreset("notion");
         setCompactMode(false);
         setDarkMode(false);
@@ -159,6 +164,7 @@ export default function Home() {
         mode,
         snoozedUntilMap,
         role: userRole,
+        currentUserName,
         uiPreset,
         compactMode,
         darkMode,
@@ -169,7 +175,7 @@ export default function Home() {
         tableColumns
       })
     );
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, uiPreset, compactMode, darkMode, savedViews, entryMetaMap, pipelineSort, defaultAssignee, tableColumns]);
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, currentUserName, uiPreset, compactMode, darkMode, savedViews, entryMetaMap, pipelineSort, defaultAssignee, tableColumns]);
 
   useEffect(() => {
     let active = true;
@@ -815,6 +821,7 @@ export default function Home() {
             <button onClick={() => setShowCustomize((value) => !value)}>{showCustomize ? "Close Customize" : "Customize"}</button>
             <select value={userRole} onChange={(event) => setUserRole(event.target.value as UserRole)}>
               <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
               <option value="member">Member</option>
               <option value="viewer">Viewer</option>
             </select>
@@ -938,6 +945,9 @@ export default function Home() {
             setFilter={setFilter}
             assigneeFilter={assigneeFilter}
             setAssigneeFilter={setAssigneeFilter}
+            myQueueOnly={myQueueOnly}
+            setMyQueueOnly={setMyQueueOnly}
+            currentUserName={currentUserName}
             entryMetaMap={entryMetaMap}
             view={pipelineView}
             setView={setPipelineView}
@@ -977,6 +987,8 @@ export default function Home() {
             setSampleMode={useSampleData}
             mode={mode}
             role={userRole}
+            currentUserName={currentUserName}
+            setCurrentUserName={setCurrentUserName}
             uiPreset={uiPreset}
             setUiPreset={setUiPreset}
             compactMode={compactMode}
@@ -1095,6 +1107,8 @@ export default function Home() {
               setSnoozedUntilMap({});
               setEntryMetaMap({});
               setSelectedEntry(null);
+              setCurrentUserName("Owner");
+              setMyQueueOnly(false);
               setDefaultAssignee("");
               setPipelineSort("updated_desc");
               setTableColumns({
@@ -1342,6 +1356,9 @@ function Pipeline({
   setFilter,
   assigneeFilter,
   setAssigneeFilter,
+  myQueueOnly,
+  setMyQueueOnly,
+  currentUserName,
   entryMetaMap,
   view,
   setView,
@@ -1366,6 +1383,9 @@ function Pipeline({
   setFilter: (value: string) => void;
   assigneeFilter: string;
   setAssigneeFilter: (value: string) => void;
+  myQueueOnly: boolean;
+  setMyQueueOnly: (value: boolean) => void;
+  currentUserName: string;
   entryMetaMap: Record<string, EntryMeta>;
   view: "kanban" | "table";
   setView: (value: "kanban" | "table") => void;
@@ -1400,6 +1420,11 @@ function Pipeline({
       if (assigneeFilter !== "all") {
         const assignee = entryMetaMap[String(entry.id)]?.assignee?.trim() ?? "";
         if (assignee !== assigneeFilter) return false;
+      }
+      if (myQueueOnly) {
+        const assignee = (entryMetaMap[String(entry.id)]?.assignee ?? "").trim().toLowerCase();
+        const me = currentUserName.trim().toLowerCase();
+        if (!me || assignee !== me) return false;
       }
       return true;
     })
@@ -1456,6 +1481,10 @@ function Pipeline({
           <option value="priority_desc">Sort: Priority (High-Low)</option>
           <option value="title_asc">Sort: Title (A-Z)</option>
         </select>
+        <label className="toggle-pill">
+          <input type="checkbox" checked={myQueueOnly} onChange={(event) => setMyQueueOnly(event.target.checked)} />
+          My Queue
+        </label>
         <div className="row-actions">
           <input value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="Save current view" />
           <button
@@ -1720,6 +1749,8 @@ function Settings({
   setSampleMode,
   mode,
   role,
+  currentUserName,
+  setCurrentUserName,
   uiPreset,
   setUiPreset,
   compactMode,
@@ -1749,6 +1780,8 @@ function Settings({
   setSampleMode: () => void;
   mode: "sample" | "empty";
   role: UserRole;
+  currentUserName: string;
+  setCurrentUserName: (value: string) => void;
   uiPreset: UiPreset;
   setUiPreset: (preset: UiPreset) => void;
   compactMode: boolean;
@@ -1908,6 +1941,10 @@ function Settings({
           Dark mode
         </label>
         <label>
+          Operator name
+          <input value={currentUserName} onChange={(event) => setCurrentUserName(event.target.value)} placeholder="Used for My Queue filter" />
+        </label>
+        <label>
           Default assignee
           <input
             value={defaultAssignee}
@@ -1923,6 +1960,7 @@ function Settings({
         </div>
         <p className="helper">Current mode: {mode === "empty" ? "Empty" : "Sample data"}</p>
         <p className="helper">Active role: {role}</p>
+        <p className="helper">Current operator: {currentUserName || "Not set"}</p>
         <div className="row-actions">
           <button onClick={setSampleMode}>Use Sample Data</button>
           <button onClick={setEmptyMode}>Start Empty</button>
@@ -2177,7 +2215,7 @@ type GateAStats = {
 };
 
 type DataMode = "local" | "cloud";
-type UserRole = "owner" | "member" | "viewer";
+type UserRole = "owner" | "admin" | "member" | "viewer";
 type UiPreset = "notion" | "trello" | "asana" | "github";
 type PipelineSort = "updated_desc" | "updated_asc" | "priority_desc" | "title_asc";
 type TableColumnsState = {
