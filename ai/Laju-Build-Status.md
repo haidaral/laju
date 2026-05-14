@@ -943,3 +943,37 @@ Current gate: v3.20-v3.30 team operations clarity.
 1. v3.40-v3.60: add workflow automation layer (rule-based reminders and action templates).
 2. v3.70-v3.90: add integrations layer prep and webhook outbox visibility.
 3. Move metadata QA to strict mode after applying `002_laju_entry_meta.sql`.
+
+## 2026-05-14 Thirty-second Slice (v3.40-v3.60 workflow automation layer)
+
+Current gate: v3.40-v3.60 automation pass.
+
+## Completed
+- v3.40 reminder automation presets:
+  - added preset actions in Settings:
+    - `Conservative` (Jobs 21d / Freelance 10d)
+    - `Balanced` (Jobs 14d / Freelance 7d)
+    - `Aggressive` (Jobs 7d / Freelance 3d)
+  - preset application updates current reminder thresholds and persists to cloud when in cloud mode.
+- v3.50 reminder UX now reflects active rule:
+  - reminder queue header now uses live threshold values from settings instead of hardcoded days.
+- v3.60 action templates in follow-up queue:
+  - added template-driven actions in reminder rows:
+    - `Template: Check In`
+    - `Template: Availability`
+  - applying a template appends a timestamped line to entry notes and logs follow-up state.
+  - cloud mode applies notes via entry patch then follows up; local mode applies note + activity trail directly.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed (metadata checks still skip while migration is missing).
+- `npm run qa:ui`: passed.
+
+## Notes
+- Local dev server needs a short warm-up window before first API QA run; rerun after delay passes reliably.
+
+## Next
+1. v3.70-v3.90: integrations prep and webhook/event outbox visibility.
+2. v4.00 gate prep: production readiness pack and release workflow artifacts.
+3. Enforce strict metadata QA after applying `002_laju_entry_meta.sql`.

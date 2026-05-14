@@ -21,6 +21,11 @@ import {
 } from "./lib/laju-data";
 
 const storageKey = "laju:v0.1:state";
+const followUpTemplates = {
+  check_in: "Checking in on timeline and next steps for this opportunity.",
+  availability: "Following up with availability and readiness to proceed this week.",
+  value_recap: "Recapping expected outcomes and fit based on previous discussion."
+} as const;
 
 export default function Home() {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
@@ -277,6 +282,25 @@ export default function Home() {
     }
   }
 
+  async function applyReminderPreset(preset: ReminderPreset) {
+    const presets: Record<ReminderPreset, { job: number; freelance: number }> = {
+      conservative: { job: 21, freelance: 10 },
+      balanced: { job: 14, freelance: 7 },
+      aggressive: { job: 7, freelance: 3 }
+    };
+    const selected = presets[preset];
+    const next: CloudSettings = {
+      ...cloudSettings,
+      jobReminderDays: selected.job,
+      freelanceReminderDays: selected.freelance
+    };
+    setCloudSettings(next);
+    if (dataMode === "cloud") {
+      await saveCloudSettings(next);
+    }
+    setOperationNotice({ type: "success", message: `Reminder preset applied: ${preset}.` });
+  }
+
   async function checkCloudHealth() {
     setHealthStatus({ status: "loading" });
     try {
@@ -486,6 +510,55 @@ export default function Home() {
       },
       ...current
     ]);
+  }
+
+  async function applyFollowUpTemplate(entryId: Entry["id"], templateKey: FollowUpTemplateKey) {
+    const entry = entries.find((item) => sameId(item.id, entryId));
+    if (!entry) return;
+    const template = followUpTemplates[templateKey];
+    if (!template) return;
+    const stampedLine = `[${currentDate}] ${template}`;
+
+    if (dataMode === "cloud" && typeof entryId === "string") {
+      const nextNotes = entry.notes?.trim() ? `${entry.notes}\n${stampedLine}` : stampedLine;
+      const patchResponse = await fetch(`/api/entries/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: nextNotes })
+      });
+      if (!patchResponse.ok) {
+        setOperationNotice({ type: "error", message: "Failed to apply follow-up template." });
+        return;
+      }
+      await markFollowedUp(entryId);
+      setOperationNotice({ type: "success", message: "Follow-up template applied." });
+      return;
+    }
+
+    setEntries((current) =>
+      current.map((item) =>
+        sameId(item.id, entryId)
+          ? {
+              ...item,
+              notes: item.notes?.trim() ? `${item.notes}\n${stampedLine}` : stampedLine
+            }
+          : item
+      )
+    );
+    setActivityLog((current) => [
+      {
+        id: Date.now(),
+        entryId,
+        action: "note_added",
+        oldStatus: entry.status,
+        newStatus: entry.status,
+        note: `${entry.title} follow-up template applied.`,
+        createdAt: currentDate
+      },
+      ...current
+    ]);
+    await markFollowedUp(entryId);
+    setOperationNotice({ type: "success", message: "Follow-up template applied." });
   }
 
   function snoozeReminder(entryId: Entry["id"], days: number) {
@@ -974,10 +1047,12 @@ export default function Home() {
           <Reminders
             entries={staleEntries}
             markFollowedUp={markFollowedUp}
+            applyFollowUpTemplate={applyFollowUpTemplate}
             updateStatus={updateStatus}
             snoozeReminder={snoozeReminder}
             clearSnooze={clearSnooze}
             snoozedUntilMap={snoozedUntilMap}
+            cloudSettings={cloudSettings}
           />
         )}
 
@@ -1002,6 +1077,7 @@ export default function Home() {
             cloudSettings={cloudSettings}
             settingsStatus={settingsStatus}
             onSaveCloudSettings={saveCloudSettings}
+            onApplyReminderPreset={applyReminderPreset}
             healthStatus={healthStatus}
             healthCheckedAt={healthCheckedAt}
             onCheckCloudHealth={checkCloudHealth}
@@ -1712,23 +1788,27 @@ function EntryCard({
 function Reminders({
   entries,
   markFollowedUp,
+  applyFollowUpTemplate,
   updateStatus,
   snoozeReminder,
   clearSnooze,
-  snoozedUntilMap
+  snoozedUntilMap,
+  cloudSettings
 }: {
   entries: Entry[];
   markFollowedUp: (id: Entry["id"]) => void;
+  applyFollowUpTemplate: (id: Entry["id"], templateKey: FollowUpTemplateKey) => void;
   updateStatus: (id: Entry["id"], status: string) => void;
   snoozeReminder: (id: Entry["id"], days: number) => void;
   clearSnooze: (id: Entry["id"]) => void;
   snoozedUntilMap: Record<string, string>;
+  cloudSettings: CloudSettings;
 }) {
   return (
     <section className="panel full">
       <div className="section-heading">
         <h2>Follow-up queue</h2>
-        <p>Jobs stale after 14 days, freelance leads after 7 days</p>
+        <p>Jobs stale after {cloudSettings.jobReminderDays} days, freelance leads after {cloudSettings.freelanceReminderDays} days</p>
       </div>
       <div className="reminder-list">
         {entries.length ? (
@@ -1742,6 +1822,8 @@ function Reminders({
               </div>
               <div className="row-actions">
                 <button onClick={() => markFollowedUp(entry.id)}>Followed Up</button>
+                <button onClick={() => applyFollowUpTemplate(entry.id, "check_in")}>Template: Check In</button>
+                <button onClick={() => applyFollowUpTemplate(entry.id, "availability")}>Template: Availability</button>
                 <button onClick={() => snoozeReminder(entry.id, 3)}>Snooze 3d</button>
                 <button onClick={() => snoozeReminder(entry.id, 7)}>Snooze 7d</button>
                 {snoozedUntilMap[String(entry.id)] && <button onClick={() => clearSnooze(entry.id)}>Clear Snooze</button>}
@@ -1779,6 +1861,7 @@ function Settings({
   cloudSettings,
   settingsStatus,
   onSaveCloudSettings,
+  onApplyReminderPreset,
   healthStatus,
   healthCheckedAt,
   onCheckCloudHealth,
@@ -1810,6 +1893,7 @@ function Settings({
   cloudSettings: CloudSettings;
   settingsStatus: "idle" | "saving" | "saved" | "error";
   onSaveCloudSettings: (next: CloudSettings) => Promise<void>;
+  onApplyReminderPreset: (preset: ReminderPreset) => Promise<void>;
   healthStatus: HealthStatus;
   healthCheckedAt: string;
   onCheckCloudHealth: () => Promise<void>;
@@ -2086,6 +2170,18 @@ function Settings({
       </div>
       <div className="panel">
         <div className="section-heading">
+          <h2>Reminder automation</h2>
+          <p>Apply cadence presets for follow-up urgency</p>
+        </div>
+        <div className="row-actions">
+          <button onClick={() => void onApplyReminderPreset("conservative")}>Conservative</button>
+          <button onClick={() => void onApplyReminderPreset("balanced")}>Balanced</button>
+          <button onClick={() => void onApplyReminderPreset("aggressive")}>Aggressive</button>
+        </div>
+        <p className="helper">Current: Jobs {cloudSettings.jobReminderDays}d / Freelance {cloudSettings.freelanceReminderDays}d</p>
+      </div>
+      <div className="panel">
+        <div className="section-heading">
           <h2>Ops monitor</h2>
           <p>Live operational snapshot</p>
         </div>
@@ -2273,6 +2369,8 @@ type GateAStats = {
 type DataMode = "local" | "cloud";
 type UserRole = "owner" | "admin" | "member" | "viewer";
 type UiPreset = "notion" | "trello" | "asana" | "github";
+type ReminderPreset = "conservative" | "balanced" | "aggressive";
+type FollowUpTemplateKey = keyof typeof followUpTemplates;
 type PipelineSort = "updated_desc" | "updated_asc" | "priority_desc" | "title_asc";
 type TableColumnsState = {
   platform: boolean;
