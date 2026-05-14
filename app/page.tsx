@@ -76,6 +76,7 @@ export default function Home() {
     assignee: true,
     priority: true
   });
+  const [integrationOutbox, setIntegrationOutbox] = useState<IntegrationOutboxEvent[]>([]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey);
@@ -105,6 +106,7 @@ export default function Home() {
               priority: true
             }
           );
+          setIntegrationOutbox(parsed.integrationOutbox ?? []);
           setMode("empty");
         } else {
           setEntries(parsed.entries?.length ? parsed.entries : initialEntries);
@@ -129,6 +131,7 @@ export default function Home() {
               priority: true
             }
           );
+          setIntegrationOutbox(parsed.integrationOutbox ?? []);
           setMode("sample");
         }
       } catch {
@@ -152,6 +155,7 @@ export default function Home() {
           assignee: true,
           priority: true
         });
+        setIntegrationOutbox([]);
         setMode("sample");
       }
     }
@@ -177,10 +181,11 @@ export default function Home() {
         entryMetaMap,
         pipelineSort,
         defaultAssignee,
-        tableColumns
+        tableColumns,
+        integrationOutbox
       })
     );
-  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, currentUserName, uiPreset, compactMode, darkMode, savedViews, entryMetaMap, pipelineSort, defaultAssignee, tableColumns]);
+  }, [activityLog, entries, isHydrated, mode, dataMode, snoozedUntilMap, userRole, currentUserName, uiPreset, compactMode, darkMode, savedViews, entryMetaMap, pipelineSort, defaultAssignee, tableColumns, integrationOutbox]);
 
   useEffect(() => {
     let active = true;
@@ -253,6 +258,43 @@ export default function Home() {
     const timeout = window.setTimeout(() => setOperationNotice(null), 4000);
     return () => window.clearTimeout(timeout);
   }, [operationNotice]);
+
+  function enqueueIntegrationEvent(channel: IntegrationOutboxEvent["channel"], event: string, summary: string) {
+    const nextEvent: IntegrationOutboxEvent = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      channel,
+      event,
+      status: "queued",
+      summary,
+      attempts: 0,
+      lastAttemptAt: currentDate
+    };
+    setIntegrationOutbox((current) => [
+      nextEvent,
+      ...current
+    ].slice(0, 80));
+  }
+
+  function retryOutboxEvent(eventId: string) {
+    setIntegrationOutbox((current) =>
+      current.map((item) =>
+        item.id === eventId
+          ? { ...item, status: "sent", attempts: item.attempts + 1, lastAttemptAt: currentDate }
+          : item
+      )
+    );
+  }
+
+  function retryAllQueuedOutbox() {
+    setIntegrationOutbox((current) =>
+      current.map((item) =>
+        item.status === "queued" || item.status === "failed"
+          ? { ...item, status: "sent", attempts: item.attempts + 1, lastAttemptAt: currentDate }
+          : item
+      )
+    );
+    setOperationNotice({ type: "success", message: "Outbox retry executed." });
+  }
 
   async function saveCloudSettings(next: CloudSettings) {
     if (userRole === "viewer") {
@@ -400,6 +442,7 @@ export default function Home() {
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setSelectedEntry((current) => (current && sameId(current.id, payload.entry.id) ? payload.entry : current));
       setActivityLog((current) => [payload.activity, ...current]);
+      enqueueIntegrationEvent("webhook", "status_changed", `${payload.entry.title} -> ${status}`);
       setOperationNotice({ type: "success", message: "Status updated." });
       return;
     }
@@ -428,6 +471,7 @@ export default function Home() {
       },
       ...current
     ]);
+    enqueueIntegrationEvent("webhook", "status_changed", `${entryBeforeUpdate.title} -> ${status}`);
   }
 
   async function bulkUpdateStatus(status: string) {
@@ -488,6 +532,7 @@ export default function Home() {
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setActivityLog((current) => [payload.activity, ...current]);
+      enqueueIntegrationEvent("webhook", "follow_up_logged", `${payload.entry.title}`);
       setOperationNotice({ type: "success", message: "Follow-up logged." });
       return;
     }
@@ -510,6 +555,7 @@ export default function Home() {
       },
       ...current
     ]);
+    enqueueIntegrationEvent("webhook", "follow_up_logged", `${entryBeforeUpdate.title}`);
   }
 
   async function applyFollowUpTemplate(entryId: Entry["id"], templateKey: FollowUpTemplateKey) {
@@ -626,6 +672,7 @@ export default function Home() {
       setEntries((current) => current.map((entry) => (sameId(entry.id, payload.entry.id) ? payload.entry : entry)));
       setSelectedEntry(payload.entry);
       setActivityLog((current) => [payload.activity, ...current]);
+      enqueueIntegrationEvent("webhook", "entry_updated", `${payload.entry.title}`);
       setOperationNotice({ type: "success", message: "Entry updated." });
       return;
     }
@@ -649,6 +696,7 @@ export default function Home() {
       },
       ...current
     ]);
+    enqueueIntegrationEvent("webhook", "entry_updated", `${entryWithTimestamp.title}`);
   }
 
   async function deleteEntry(entryId: Entry["id"]) {
@@ -734,6 +782,7 @@ export default function Home() {
       const payload = (await response.json()) as { entry: Entry; activity: ActivityLog };
       setEntries((current) => [payload.entry, ...current]);
       setActivityLog((current) => [payload.activity, ...current]);
+      enqueueIntegrationEvent("sheet_sync", "entry_created", `${payload.entry.title}`);
       if (defaultAssignee.trim()) {
         const nextMeta: EntryMeta = {
           assignee: defaultAssignee.trim(),
@@ -770,6 +819,7 @@ export default function Home() {
       },
       ...current
     ]);
+    enqueueIntegrationEvent("sheet_sync", "entry_created", `${entry.title}`);
     if (defaultAssignee.trim()) {
       setEntryMetaMap((current) => ({
         ...current,
@@ -851,6 +901,7 @@ export default function Home() {
       },
       ...current
     ]);
+    enqueueIntegrationEvent("export_sync", "csv_exported", "CSV export downloaded");
   }
 
   return (
@@ -1175,6 +1226,9 @@ export default function Home() {
             cloudDataStatus={cloudDataStatus}
             defaultAssignee={defaultAssignee}
             setDefaultAssignee={setDefaultAssignee}
+            integrationOutbox={integrationOutbox}
+            onRetryOutboxEvent={retryOutboxEvent}
+            onRetryAllOutbox={retryAllQueuedOutbox}
             resetLocalData={() => {
               if (userRole === "viewer") {
                 setOperationNotice({ type: "error", message: "Viewer role cannot reset data." });
@@ -1187,6 +1241,7 @@ export default function Home() {
               setSelectedEntry(null);
               setCurrentUserName("Owner");
               setMyQueueOnly(false);
+              setIntegrationOutbox([]);
               setDefaultAssignee("");
               setPipelineSort("updated_desc");
               setTableColumns({
@@ -1872,7 +1927,10 @@ function Settings({
   cloudDataStatus,
   resetLocalData,
   defaultAssignee,
-  setDefaultAssignee
+  setDefaultAssignee,
+  integrationOutbox,
+  onRetryOutboxEvent,
+  onRetryAllOutbox
 }: {
   entries: Entry[];
   activityLog: ActivityLog[];
@@ -1905,6 +1963,9 @@ function Settings({
   resetLocalData: () => void;
   defaultAssignee: string;
   setDefaultAssignee: (value: string) => void;
+  integrationOutbox: IntegrationOutboxEvent[];
+  onRetryOutboxEvent: (eventId: string) => void;
+  onRetryAllOutbox: () => void;
 }) {
   const [exportTypeFilter, setExportTypeFilter] = useState<"all" | "job" | "freelance">("all");
   const [exportStatusFilter, setExportStatusFilter] = useState("all");
@@ -1961,6 +2022,9 @@ function Settings({
     { role: "member", create: true, edit: true, bulk: true, settings: true },
     { role: "viewer", create: false, edit: false, bulk: false, settings: false }
   ];
+  const outboxQueued = integrationOutbox.filter((item) => item.status === "queued").length;
+  const outboxFailed = integrationOutbox.filter((item) => item.status === "failed").length;
+  const outboxSent = integrationOutbox.filter((item) => item.status === "sent").length;
   let healthMessage = "No health check yet.";
   if (healthStatus.status === "loading") {
     healthMessage = "Running health check...";
@@ -2198,6 +2262,37 @@ function Settings({
             <span>Snoozed Reminders</span>
             <strong>{snoozedEntriesCount}</strong>
           </article>
+          <article className="stat-card inline">
+            <span>Outbox Queued</span>
+            <strong>{outboxQueued}</strong>
+          </article>
+        </div>
+      </div>
+      <div className="panel wide">
+        <div className="section-heading">
+          <h2>Integration outbox</h2>
+          <p>Webhook and sync delivery visibility</p>
+        </div>
+        <div className="row-actions">
+          <span className="helper">Queued: {outboxQueued}</span>
+          <span className="helper">Sent: {outboxSent}</span>
+          <span className="helper">Failed: {outboxFailed}</span>
+          <button onClick={onRetryAllOutbox}>Retry All</button>
+        </div>
+        <div className="activity-list compact">
+          {integrationOutbox.slice(0, 25).map((item) => (
+            <div className="activity-row" key={item.id}>
+              <div>
+                <strong>{item.channel} - {item.event}</strong>
+                <span>{item.summary} - attempts {item.attempts}</span>
+              </div>
+              <div className="row-actions">
+                <em>{item.status}</em>
+                {item.status !== "sent" && <button onClick={() => onRetryOutboxEvent(item.id)}>Retry</button>}
+              </div>
+            </div>
+          ))}
+          {!integrationOutbox.length && <p className="empty">No outbox events yet.</p>}
         </div>
       </div>
       <div className="panel">
@@ -2379,6 +2474,15 @@ type TableColumnsState = {
   updated: boolean;
   assignee: boolean;
   priority: boolean;
+};
+type IntegrationOutboxEvent = {
+  id: string;
+  channel: "webhook" | "sheet_sync" | "export_sync";
+  event: string;
+  status: "queued" | "sent" | "failed";
+  summary: string;
+  attempts: number;
+  lastAttemptAt: string;
 };
 type CloudSettings = {
   jobReminderDays: number;

@@ -977,3 +977,41 @@ Current gate: v3.40-v3.60 automation pass.
 1. v3.70-v3.90: integrations prep and webhook/event outbox visibility.
 2. v4.00 gate prep: production readiness pack and release workflow artifacts.
 3. Enforce strict metadata QA after applying `002_laju_entry_meta.sql`.
+
+## 2026-05-14 Thirty-third Slice (v3.70-v3.90 integration outbox visibility)
+
+Current gate: v3.70-v3.90 integration preparation.
+
+## Completed
+- Added integration outbox state model and persistence in app state contract:
+  - channel (`webhook`, `sheet_sync`, `export_sync`)
+  - event
+  - status (`queued`, `sent`, `failed`)
+  - summary, attempts, last attempt date
+- Wired outbox event generation for core workflows:
+  - status update
+  - follow-up logging
+  - entry create
+  - entry update
+  - CSV export
+- Added outbox operations:
+  - single event retry
+  - retry all queued/failed events
+- Added Settings visibility surface:
+  - outbox queue/sent/failed counters
+  - compact event feed with retry controls
+  - outbox count included in Ops monitor cards
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run qa:api`: passed (metadata checks still skip while migration is missing).
+- `npm run qa:ui`: passed.
+
+## Notes
+- Build/runtime reliability on this machine still needs occasional clean cycle and short dev-server warm-up.
+
+## Next
+1. v4.00: production readiness pack and release workflow artifacts.
+2. Apply `002_laju_entry_meta.sql`, then run strict metadata QA with `LAJU_QA_STRICT_META=1`.
+3. Execute signed-in v3 manual checklist and attach evidence for v4 gate.

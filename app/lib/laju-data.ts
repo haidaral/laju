@@ -59,6 +59,15 @@ export type LajuLocalState = {
     assignee: boolean;
     priority: boolean;
   };
+  integrationOutbox?: Array<{
+    id: string;
+    channel: "webhook" | "sheet_sync" | "export_sync";
+    event: string;
+    status: "queued" | "sent" | "failed";
+    summary: string;
+    attempts: number;
+    lastAttemptAt: string;
+  }>;
 };
 
 export type SavedView = {
