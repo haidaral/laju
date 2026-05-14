@@ -910,3 +910,36 @@ Current gate: v3.10-v3.30 team operations foundation.
 1. v3.20: add assignee workload board in Overview (`My Queue`, `Unassigned`, `Team load` metrics).
 2. v3.30: role-permission matrix surface and stricter write-control messaging by role tier.
 3. Keep migration strict-mode blocker path for metadata until `entry_meta` table is live.
+
+## 2026-05-14 Thirty-first Slice (v3.20-v3.30 workload + role matrix)
+
+Current gate: v3.20-v3.30 team operations clarity.
+
+## Completed
+- v3.20 workload visibility in Overview:
+  - added `My Queue`, `Unassigned`, and `High Priority` stats.
+  - stats compute from active entries + collaboration metadata (`assignee`, `priority`) and current operator profile.
+- v3.20 queue ergonomics in pipeline:
+  - `My Queue` toggle in toolbar now filters entries to assignee matching `Operator name`.
+- v3.30 role model and controls:
+  - role union expanded to `owner/admin/member/viewer` in app state and persistence contract.
+  - added Role Matrix panel in Settings showing write boundaries by role:
+    - create
+    - edit
+    - bulk
+    - settings
+  - active role is surfaced directly in the matrix.
+
+## Verified
+- `npm run lint`: passed.
+- `npm run build`: passed after clean restart cycle.
+- `npm run qa:api`: passed (metadata skip path still expected until migration is applied).
+- `npm run qa:ui`: passed.
+
+## Notes
+- Local Next.js process warm-up on this machine still causes occasional first-run fetch/build instability; resolved with clean restart + short warm-up delay.
+
+## Next
+1. v3.40-v3.60: add workflow automation layer (rule-based reminders and action templates).
+2. v3.70-v3.90: add integrations layer prep and webhook outbox visibility.
+3. Move metadata QA to strict mode after applying `002_laju_entry_meta.sql`.

@@ -934,6 +934,8 @@ export default function Home() {
             topInsights={topInsights}
             onboardingTasks={onboardingTasks}
             mode={mode}
+            entryMetaMap={entryMetaMap}
+            currentUserName={currentUserName}
           />
         )}
 
@@ -1190,7 +1192,9 @@ function Overview({
   gateAStats,
   topInsights,
   onboardingTasks,
-  mode
+  mode,
+  entryMetaMap,
+  currentUserName
 }: {
   entries: Entry[];
   activeEntries: Entry[];
@@ -1201,12 +1205,25 @@ function Overview({
   topInsights: Array<{ entry: Entry; score: number; nextAction: string }>;
   onboardingTasks: Array<{ label: string; done: boolean }>;
   mode: "sample" | "empty";
+  entryMetaMap: Record<string, EntryMeta>;
+  currentUserName: string;
 }) {
+  const normalizedCurrentUser = currentUserName.trim().toLowerCase();
+  const myQueueCount = activeEntries.filter((entry) => {
+    if (!normalizedCurrentUser) return false;
+    return (entryMetaMap[String(entry.id)]?.assignee ?? "").trim().toLowerCase() === normalizedCurrentUser;
+  }).length;
+  const unassignedCount = activeEntries.filter((entry) => !(entryMetaMap[String(entry.id)]?.assignee ?? "").trim()).length;
+  const highPriorityCount = activeEntries.filter((entry) => (entryMetaMap[String(entry.id)]?.priority ?? "Medium") === "High").length;
+
   const stats = [
     ["Total Entries", entries.length],
     ["Active", activeEntries.length],
     ["Needs Attention", staleEntries.length],
-    ["Win Rate", `${winRate}%`]
+    ["Win Rate", `${winRate}%`],
+    ["My Queue", myQueueCount],
+    ["Unassigned", unassignedCount],
+    ["High Priority", highPriorityCount]
   ];
 
   return (
@@ -1854,6 +1871,12 @@ function Settings({
       );
     })
     .slice(0, 40);
+  const roleMatrix: Array<{ role: UserRole; create: boolean; edit: boolean; bulk: boolean; settings: boolean }> = [
+    { role: "owner", create: true, edit: true, bulk: true, settings: true },
+    { role: "admin", create: true, edit: true, bulk: true, settings: true },
+    { role: "member", create: true, edit: true, bulk: true, settings: true },
+    { role: "viewer", create: false, edit: false, bulk: false, settings: false }
+  ];
   let healthMessage = "No health check yet.";
   if (healthStatus.status === "loading") {
     healthMessage = "Running health check...";
@@ -1964,6 +1987,39 @@ function Settings({
         <div className="row-actions">
           <button onClick={setSampleMode}>Use Sample Data</button>
           <button onClick={setEmptyMode}>Start Empty</button>
+        </div>
+      </div>
+      <div className="panel">
+        <div className="section-heading">
+          <h2>Role matrix</h2>
+          <p>Operational write boundaries by role</p>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Create</th>
+                <th>Edit</th>
+                <th>Bulk</th>
+                <th>Settings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {roleMatrix.map((item) => (
+                <tr key={item.role}>
+                  <td>
+                    <strong>{item.role}</strong>
+                    {item.role === role ? <span className="helper"> (active)</span> : null}
+                  </td>
+                  <td>{item.create ? "Allowed" : "Blocked"}</td>
+                  <td>{item.edit ? "Allowed" : "Blocked"}</td>
+                  <td>{item.bulk ? "Allowed" : "Blocked"}</td>
+                  <td>{item.settings ? "Allowed" : "Blocked"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
       <div className="panel">
