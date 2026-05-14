@@ -1015,3 +1015,25 @@ Current gate: v3.70-v3.90 integration preparation.
 1. v4.00: production readiness pack and release workflow artifacts.
 2. Apply `002_laju_entry_meta.sql`, then run strict metadata QA with `LAJU_QA_STRICT_META=1`.
 3. Execute signed-in v3 manual checklist and attach evidence for v4 gate.
+
+## 2026-05-14 Thirty-fourth Slice (v4.00 gate pack)
+
+Current gate: v4.00 release-readiness packaging.
+
+## Completed
+- Added production runbook:
+  - `ai/Laju-Production-Runbook.md`
+  - includes pre-deploy checks, deployment flow, post-deploy verification, incident triage, and rollback criteria.
+- Added v4 release pack:
+  - `ai/Laju-v4.00-Release-Pack.md`
+  - defines mandatory quality gates, manual sign-off checklist, blocking conditions, and GO/NO-GO decision rules.
+
+## Verified
+- Artifacts added and aligned with current implementation + QA workflow.
+
+## Remaining to declare v4.00 `GO`
+1. Apply `002_laju_entry_meta.sql` in active Supabase environment.
+2. Run strict metadata gate:
+   - `LAJU_QA_STRICT_META=1 npm run qa:api`
+3. Execute `ai/Laju-v3.00-Manual-QA-Checklist.md` with signed-in evidence capture.
+4. Confirm final GO/NO-GO in `ai/Laju-v4.00-Release-Pack.md`.
